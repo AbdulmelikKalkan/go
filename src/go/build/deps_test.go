@@ -40,7 +40,8 @@ var depsRules = `
 	# No dependencies allowed for any of these packages.
 	NONE
 	< constraints, container/list, container/ring,
-	  internal/cfg, internal/cpu, internal/goarch,
+	  internal/cfg, internal/cpu, internal/coverage,
+	  internal/coverage/uleb128, internal/coverage/rtcov, internal/goarch,
 	  internal/goexperiment, internal/goos,
 	  internal/goversion, internal/nettrace,
 	  unicode/utf8, unicode/utf16, unicode,
@@ -52,7 +53,7 @@ var depsRules = `
 
 	# RUNTIME is the core runtime group of packages, all of them very light-weight.
 	internal/abi, internal/cpu, internal/goarch,
-	internal/goexperiment, internal/goos, unsafe
+    internal/coverage/rtcov, internal/goexperiment, internal/goos, unsafe
 	< internal/bytealg
 	< internal/itoa
 	< internal/unsafeheader
@@ -547,6 +548,31 @@ var depsRules = `
 
 	FMT
 	< internal/diff, internal/txtar;
+
+    FMT, os
+    < internal/coverage/slicewriter;
+
+    encoding/binary, internal/unsafeheader, unsafe
+    < internal/coverage/slicereader;
+
+    FMT, io, internal/coverage/slicereader, internal/coverage/uleb128
+    < internal/coverage/stringtab;
+
+    FMT, encoding/binary, internal/coverage, internal/coverage/stringtab,
+    io, os, bufio, crypto/md5
+    < internal/coverage/encodemeta;
+
+    FMT, bufio, encoding/binary, internal/coverage,
+    internal/coverage/stringtab, internal/coverage/slicewriter, os, unsafe
+    < internal/coverage/encodecounter;
+
+    FMT, encoding/binary, internal/coverage, io, os,
+    internal/coverage/slicereader, internal/coverage/stringtab
+    < internal/coverage/decodecounter;
+
+    FMT, encoding/binary, internal/coverage, io, os,
+    crypto/md5, internal/coverage/stringtab
+    < internal/coverage/decodemeta;
 `
 
 // listStdPkgs returns the same list of packages as "go list std".
