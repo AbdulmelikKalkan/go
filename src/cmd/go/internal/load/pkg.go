@@ -41,6 +41,7 @@ import (
 	"cmd/go/internal/str"
 	"cmd/go/internal/trace"
 	"cmd/go/internal/vcs"
+	"cmd/internal/pkgpattern"
 	"cmd/internal/sys"
 
 	"golang.org/x/mod/modfile"
@@ -3115,10 +3116,10 @@ func PackagesAndErrorsOutsideModule(ctx context.Context, opts PackageOpts, args 
 	}
 	patterns := make([]string, len(args))
 	for i, arg := range args {
-		if !strings.HasSuffix(arg, "@"+version) {
+		p, found := strings.CutSuffix(arg, "@"+version)
+		if !found {
 			return nil, fmt.Errorf("%s: all arguments must refer to packages in the same module at the same version (@%s)", arg, version)
 		}
-		p := arg[:len(arg)-len(version)-1]
 		switch {
 		case build.IsLocalImport(p):
 			return nil, fmt.Errorf("%s: argument must be a package path, not a relative path", arg)
@@ -3201,7 +3202,7 @@ func PackagesAndErrorsOutsideModule(ctx context.Context, opts PackageOpts, args 
 	matchers := make([]func(string) bool, len(patterns))
 	for i, p := range patterns {
 		if strings.Contains(p, "...") {
-			matchers[i] = search.MatchPattern(p)
+			matchers[i] = pkgpattern.MatchPattern(p)
 		}
 	}
 	return pkgs, nil

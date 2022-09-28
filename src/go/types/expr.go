@@ -463,7 +463,7 @@ func (check *Checker) representation(x *operand, typ *Basic) (constant.Value, er
 }
 
 func (check *Checker) invalidConversion(code errorCode, x *operand, target Type) {
-	msg := "cannot convert %s to %s"
+	msg := "cannot convert %s to type %s"
 	switch code {
 	case _TruncatedFloat:
 		msg = "%s truncated to %s"
@@ -765,11 +765,6 @@ func (check *Checker) comparison(x, y *operand, op token.Token, switchCase bool)
 		// know after seeing the 2nd operand whether we have
 		// a type mismatch.
 		errOp = y
-		// For now, if we're not running the compiler, use the
-		// position of x to minimize changes to existing tests.
-		if !compilerErrorMessages {
-			errOp = x
-		}
 		cause = check.sprintf("mismatched types %s and %s", x.typ, y.typ)
 		goto Error
 	}
@@ -1397,7 +1392,7 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 					}
 					i := fieldIndex(utyp.fields, check.pkg, key.Name)
 					if i < 0 {
-						check.errorf(kv, _MissingLitField, "unknown field %s in struct literal", key.Name)
+						check.errorf(kv, _MissingLitField, "unknown field %s in struct literal of type %s", key.Name, base)
 						continue
 					}
 					fld := fields[i]
@@ -1803,11 +1798,7 @@ func (check *Checker) singleValue(x *operand) {
 		// tuple types are never named - no need for underlying type below
 		if t, ok := x.typ.(*Tuple); ok {
 			assert(t.Len() != 1)
-			if compilerErrorMessages {
-				check.errorf(x, _TooManyValues, "multiple-value %s in single-value context", x)
-			} else {
-				check.errorf(x, _TooManyValues, "%d-valued %s where single value is expected", t.Len(), x)
-			}
+			check.errorf(x, _TooManyValues, "multiple-value %s in single-value context", x)
 			x.mode = invalid
 		}
 	}
