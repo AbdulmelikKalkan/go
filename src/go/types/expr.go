@@ -179,7 +179,7 @@ func (check *Checker) unary(x *operand, e *ast.UnaryExpr) {
 	case token.ARROW:
 		u := coreType(x.typ)
 		if u == nil {
-			check.invalidOp(x, _InvalidReceive, "cannot receive from %s: no core type", x)
+			check.invalidOp(x, _InvalidReceive, "cannot receive from %s (no core type)", x)
 			x.mode = invalid
 			return
 		}
@@ -579,11 +579,7 @@ func (check *Checker) updateExprType0(parent, x ast.Expr, typ Type, final bool) 
 		// We already know from the shift check that it is representable
 		// as an integer if it is a constant.
 		if !allInteger(typ) {
-			if compilerErrorMessages {
-				check.invalidOp(x, _InvalidShiftOperand, "%s (shift of type %s)", parent, typ)
-			} else {
-				check.invalidOp(x, _InvalidShiftOperand, "shifted operand %s (type %s) must be integer", x, typ)
-			}
+			check.invalidOp(x, _InvalidShiftOperand, "shifted operand %s (type %s) must be integer", x, typ)
 			return
 		}
 		// Even if we have an integer, if the value is a constant we
@@ -852,11 +848,7 @@ Error:
 	if switchCase {
 		check.errorf(x, code, "invalid case %s in switch on %s (%s)", x.expr, y.expr, cause) // error position always at 1st operand
 	} else {
-		if compilerErrorMessages {
-			check.invalidOp(errOp, code, "%s %s %s (%s)", x.expr, op, y.expr, cause)
-		} else {
-			check.invalidOp(errOp, code, "cannot compare %s %s %s (%s)", x.expr, op, y.expr, cause)
-		}
+		check.invalidOp(errOp, code, "%s %s %s (%s)", x.expr, op, y.expr, cause)
 	}
 	x.mode = invalid
 }
@@ -1351,7 +1343,7 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 			typ = hint
 			base, _ = deref(coreType(typ)) // *T implies &T{}
 			if base == nil {
-				check.errorf(e, _InvalidLit, "invalid composite literal element type %s: no core type", typ)
+				check.errorf(e, _InvalidLit, "invalid composite literal element type %s (no core type)", typ)
 				goto Error
 			}
 
@@ -1719,7 +1711,7 @@ func (check *Checker) typeAssertion(e ast.Expr, x *operand, T Type, typeSwitch b
 		return // success
 	}
 
-	cause := check.missingMethodReason(T, x.typ, method, alt)
+	cause := check.missingMethodCause(T, x.typ, method, alt)
 
 	if typeSwitch {
 		check.errorf(e, _ImpossibleAssert, "impossible type switch case: %s\n\t%s cannot have dynamic type %s %s", e, x, T, cause)
