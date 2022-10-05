@@ -2,9 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build ignore
-// +build ignore
-
 // The gen command generates Go code (in the parent directory) for all
 // the architecture-specific opcodes, blocks, and rewrites.
 package main
@@ -162,6 +159,7 @@ func main() {
 		tasks = append(tasks, func() {
 			genRules(a)
 			genSplitLoadRules(a)
+			genLateLowerRules(a)
 		})
 	}
 	var wg sync.WaitGroup
