@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE ast.
 
-package types2_test
+package types_test
 
 import (
-	"cmd/compile/internal/syntax"
+	"go/ast"
+	"go/token"
 	"testing"
 )
 
@@ -14,38 +15,39 @@ const errorfMinArgCount = 4
 // TestErrorCalls makes sure that check.errorf calls have at least
 // errorfMinArgCount arguments (otherwise we should use check.error).
 func TestErrorCalls(t *testing.T) {
-	files, err := pkgFiles(".")
+	fset := token.NewFileSet()
+	files, err := pkgFiles(fset, ".", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for _, file := range files {
-		syntax.Crawl(file, func(n syntax.Node) bool {
-			call, _ := n.(*syntax.CallExpr)
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, _ := n.(*ast.CallExpr)
 			if call == nil {
-				return false
+				return true
 			}
-			selx, _ := call.Fun.(*syntax.SelectorExpr)
+			selx, _ := call.Fun.(*ast.SelectorExpr)
 			if selx == nil {
-				return false
+				return true
 			}
 			if !(isName(selx.X, "check") && isName(selx.Sel, "errorf")) {
-				return false
+				return true
 			}
 			// check.errorf calls should have at least errorfMinArgCount arguments:
 			// position, code, format string, and arguments to format
-			if n := len(call.ArgList); n < errorfMinArgCount {
-				t.Errorf("%s: got %d arguments, want at least %d", call.Pos(), n, errorfMinArgCount)
+			if n := len(call.Args); n < errorfMinArgCount {
+				t.Errorf("%s: got %d arguments, want at least %d", fset.Position(call.Pos()), n, errorfMinArgCount)
 				return false
 			}
-			return false
+			return true
 		})
 	}
 }
 
-func isName(n syntax.Node, name string) bool {
-	if n, ok := n.(*syntax.Name); ok {
-		return n.Value == name
+func isName(n ast.Node, name string) bool {
+	if n, ok := n.(*ast.Ident); ok {
+		return n.Name == name
 	}
 	return false
 }
