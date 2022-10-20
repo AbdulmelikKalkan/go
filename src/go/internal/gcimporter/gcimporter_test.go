@@ -33,16 +33,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// skipSpecialPlatforms causes the test to be skipped for platforms where
-// builders (build.golang.org) don't have access to compiled packages for
-// import.
-func skipSpecialPlatforms(t *testing.T) {
-	switch platform := runtime.GOOS + "-" + runtime.GOARCH; platform {
-	case "darwin-arm64":
-		t.Skipf("no compiled packages available for import on %s", platform)
-	}
-}
-
 // compile runs the compiler on filename, with dirname as the working directory,
 // and writes the output file to outdirname.
 // compile gives the resulting package a packagepath of testdata/<filebasename>.
@@ -130,6 +120,8 @@ func TestImportTestdata(t *testing.T) {
 		t.Skipf("gc-built packages not available (compiler = %s)", runtime.Compiler)
 	}
 
+	testenv.MustHaveGoBuild(t)
+
 	testfiles := map[string][]string{
 		"exports.go":  {"go/ast", "go/token"},
 		"generics.go": nil,
@@ -167,6 +159,8 @@ func TestImportTypeparamTests(t *testing.T) {
 	if runtime.Compiler != "gc" {
 		t.Skipf("gc-built packages not available (compiler = %s)", runtime.Compiler)
 	}
+
+	testenv.MustHaveGoBuild(t)
 
 	tmpdir := mktmpdir(t)
 	defer os.RemoveAll(tmpdir)
@@ -284,7 +278,7 @@ func checkFile(t *testing.T, filename string, src []byte) *types.Package {
 }
 
 func TestVersionHandling(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -377,7 +371,7 @@ func TestVersionHandling(t *testing.T) {
 }
 
 func TestImportStdLib(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -417,7 +411,7 @@ var importedObjectTests = []struct {
 }
 
 func TestImportedTypes(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -493,7 +487,7 @@ func verifyInterfaceMethodRecvs(t *testing.T, named *types.Named, level int) {
 }
 
 func TestIssue5815(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -522,7 +516,7 @@ func TestIssue5815(t *testing.T) {
 
 // Smoke test to ensure that imported methods get the correct package.
 func TestCorrectMethodPackage(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -546,7 +540,7 @@ func TestCorrectMethodPackage(t *testing.T) {
 }
 
 func TestIssue13566(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -585,7 +579,7 @@ func TestIssue13566(t *testing.T) {
 }
 
 func TestTypeNamingOrder(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -609,7 +603,7 @@ func TestTypeNamingOrder(t *testing.T) {
 }
 
 func TestIssue13898(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -656,7 +650,7 @@ func TestIssue13898(t *testing.T) {
 }
 
 func TestIssue15517(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -696,7 +690,7 @@ func TestIssue15517(t *testing.T) {
 }
 
 func TestIssue15920(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -713,7 +707,7 @@ func TestIssue15920(t *testing.T) {
 }
 
 func TestIssue20046(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -734,7 +728,7 @@ func TestIssue20046(t *testing.T) {
 	}
 }
 func TestIssue25301(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
@@ -751,7 +745,7 @@ func TestIssue25301(t *testing.T) {
 }
 
 func TestIssue25596(t *testing.T) {
-	skipSpecialPlatforms(t)
+	testenv.MustHaveGoBuild(t)
 
 	// This package only handles gc export data.
 	if runtime.Compiler != "gc" {
