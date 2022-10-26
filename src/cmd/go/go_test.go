@@ -33,6 +33,9 @@ import (
 	"cmd/go/internal/cfg"
 	"cmd/go/internal/robustio"
 	"cmd/go/internal/search"
+	"cmd/go/internal/vcs"
+	"cmd/go/internal/vcweb/vcstest"
+	"cmd/go/internal/web"
 	"cmd/go/internal/work"
 	"cmd/internal/sys"
 
@@ -129,6 +132,24 @@ func TestMain(m *testing.M) {
 				return fmt.Errorf("%stestgo must not write to GOROOT (installing to %s)", callerPos, filepath.Join("GOROOT", rel))
 			}
 		}
+
+		if vcsTestHost := os.Getenv("TESTGO_VCSTEST_HOST"); vcsTestHost != "" {
+			vcs.VCSTestRepoURL = "http://" + vcsTestHost
+			vcs.VCSTestHosts = vcstest.Hosts
+			vcsTestTLSHost := os.Getenv("TESTGO_VCSTEST_TLS_HOST")
+			vcsTestClient, err := vcstest.TLSClient(os.Getenv("TESTGO_VCSTEST_CERT"))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "loading certificates from $TESTGO_VCSTEST_CERT: %v", err)
+			}
+			var interceptors []web.Interceptor
+			for _, host := range vcstest.Hosts {
+				interceptors = append(interceptors,
+					web.Interceptor{Scheme: "http", FromHost: host, ToHost: vcsTestHost},
+					web.Interceptor{Scheme: "https", FromHost: host, ToHost: vcsTestTLSHost, Client: vcsTestClient})
+			}
+			web.EnableTestHooks(interceptors)
+		}
+
 		cmdgo.Main()
 		os.Exit(0)
 	}
