@@ -26,6 +26,7 @@ type DebugFlags struct {
 	DwarfInl                   int    `help:"print information about DWARF inlined function creation"`
 	Export                     int    `help:"print export data"`
 	GCProg                     int    `help:"print dump of GC programs"`
+	Gossahash                  string `help:"hash value for use in debugging the compiler"`
 	InlFuncsWithClosures       int    `help:"allow functions with closures to be inlined"`
 	Libfuzzer                  int    `help:"enable coverage instrumentation for libfuzzer"`
 	LocationLists              int    `help:"print information about DWARF location list creation"`
@@ -45,7 +46,6 @@ type DebugFlags struct {
 	WB                         int    `help:"print information about write barriers"`
 	ABIWrap                    int    `help:"print information about ABI wrapper generation"`
 	MayMoreStack               string `help:"call named function before all stack growth checks"`
-	InlineHotFuncThreshold     string `help:"threshold percentage for determining functions as hot candidates for inlining"`
 	InlineHotCallSiteThreshold string `help:"threshold percentage for determining call sites as hot candidates for inlining"`
 	InlineHotBudget            int    `help:"inline budget for hot functions"`
 	PGOInline                  int    `help:"debug profile-guided inlining"`
