@@ -87,7 +87,8 @@ func pgoInlinePrologue(p *pgo.Profile) {
 	if s, err := strconv.ParseFloat(base.Debug.InlineHotCallSiteCDFThreshold, 64); err == nil {
 		inlineCDFHotCallSiteThresholdPercent = s
 	}
-	inlineHotCallSiteThresholdPercent = computeThresholdFromCDF(p)
+	var hotCallsites []pgo.NodeMapKey
+	inlineHotCallSiteThresholdPercent, hotCallsites = computeThresholdFromCDF(p)
 	if base.Debug.PGOInline > 0 {
 		fmt.Printf("hot-callsite-thres-from-CDF=%v\n", inlineHotCallSiteThresholdPercent)
 	}
@@ -96,6 +97,13 @@ func pgoInlinePrologue(p *pgo.Profile) {
 		inlineHotMaxBudget = int32(base.Debug.InlineHotBudget)
 	}
 
+	// mark inlineable callees from hot edges
+	for _, n := range hotCallsites {
+		if fn := p.WeightedCG.IRNodes[n.CalleeName]; fn != nil {
+			candHotCalleeMap[fn] = struct{}{}
+		}
+	}
+	// mark hot call sites
 	ir.VisitFuncsBottomUp(typecheck.Target.Decls, func(list []*ir.Func, recursive bool) {
 		for _, f := range list {
 			name := ir.PkgFuncName(f)
@@ -104,10 +112,9 @@ func pgoInlinePrologue(p *pgo.Profile) {
 					if e.Weight != 0 {
 						edgeweightpercent := pgo.WeightInPercentage(e.Weight, p.TotalEdgeWeight)
 						if edgeweightpercent > inlineHotCallSiteThresholdPercent {
-							csi := pgo.CallSiteInfo{Line: e.CallSite, Caller: n.AST}
+							csi := pgo.CallSiteInfo{LineOffset: e.CallSiteOffset, Caller: n.AST}
 							if _, ok := candHotEdgeMap[csi]; !ok {
 								candHotEdgeMap[csi] = struct{}{}
-								candHotCalleeMap[e.Dst] = struct{}{}
 							}
 						}
 					}
@@ -121,7 +128,10 @@ func pgoInlinePrologue(p *pgo.Profile) {
 	}
 }
 
-func computeThresholdFromCDF(p *pgo.Profile) float64 {
+// computeThresholdFromCDF computes an edge weight threshold based on the
+// CDF of edge weights from the profile. Returns the threshold, and the
+// list of edges that make up the given percentage of the CDF.
+func computeThresholdFromCDF(p *pgo.Profile) (float64, []pgo.NodeMapKey) {
 	nodes := make([]pgo.NodeMapKey, len(p.NodeMap))
 	i := 0
 	for n := range p.NodeMap {
@@ -140,17 +150,17 @@ func computeThresholdFromCDF(p *pgo.Profile) float64 {
 		if ni.CalleeName != nj.CalleeName {
 			return ni.CalleeName < nj.CalleeName
 		}
-		return ni.CallSite < nj.CallSite
+		return ni.CallSiteOffset < nj.CallSiteOffset
 	})
 	cum := int64(0)
-	for _, n := range nodes {
+	for i, n := range nodes {
 		w := p.NodeMap[n].EWeight
 		cum += w
 		if pgo.WeightInPercentage(cum, p.TotalEdgeWeight) > inlineCDFHotCallSiteThresholdPercent {
-			return pgo.WeightInPercentage(w, p.TotalEdgeWeight)
+			return pgo.WeightInPercentage(w, p.TotalEdgeWeight), nodes[:i]
 		}
 	}
-	return 100
+	return 100, nil
 }
 
 // pgoInlineEpilogue updates IRGraph after inlining.
@@ -478,8 +488,8 @@ func (v *hairyVisitor) doNode(n ir.Node) bool {
 		// Determine if the callee edge is for an inlinable hot callee or not.
 		if v.profile != nil && v.curFunc != nil {
 			if fn := inlCallee(n.X, v.profile); fn != nil && typecheck.HaveInlineBody(fn) {
-				line := int(base.Ctxt.InnermostPos(n.Pos()).RelLine())
-				csi := pgo.CallSiteInfo{Line: line, Caller: v.curFunc}
+				lineOffset := pgo.NodeLineOffset(n, fn)
+				csi := pgo.CallSiteInfo{LineOffset: lineOffset, Caller: v.curFunc}
 				if _, o := candHotEdgeMap[csi]; o {
 					if base.Debug.PGOInline > 0 {
 						fmt.Printf("hot-callsite identified at line=%v for func=%v\n", ir.Line(n), ir.PkgFuncName(v.curFunc))
@@ -909,8 +919,8 @@ func mkinlcall(n *ir.CallExpr, fn *ir.Func, maxCost int32, inlCalls *[]*ir.Inlin
 	}
 	if fn.Inl.Cost > maxCost {
 		// If the callsite is hot and it is under the inlineHotMaxBudget budget, then try to inline it, or else bail.
-		line := int(base.Ctxt.InnermostPos(n.Pos()).RelLine())
-		csi := pgo.CallSiteInfo{Line: line, Caller: ir.CurFunc}
+		lineOffset := pgo.NodeLineOffset(n, fn)
+		csi := pgo.CallSiteInfo{LineOffset: lineOffset, Caller: ir.CurFunc}
 		if _, ok := candHotEdgeMap[csi]; ok {
 			if fn.Inl.Cost > inlineHotMaxBudget {
 				if logopt.Enabled() {
@@ -1074,8 +1084,7 @@ func mkinlcall(n *ir.CallExpr, fn *ir.Func, maxCost int32, inlCalls *[]*ir.Inlin
 	}
 
 	if base.Debug.PGOInline > 0 {
-		line := int(base.Ctxt.InnermostPos(n.Pos()).RelLine())
-		csi := pgo.CallSiteInfo{Line: line, Caller: ir.CurFunc}
+		csi := pgo.CallSiteInfo{LineOffset: pgo.NodeLineOffset(n, fn), Caller: ir.CurFunc}
 		if _, ok := inlinedCallSites[csi]; !ok {
 			inlinedCallSites[csi] = struct{}{}
 		}
