@@ -129,7 +129,7 @@ func (b *Builder) Do(ctx context.Context, root *Action) {
 			a.json.TimeStart = time.Now()
 		}
 		var err error
-		if a.Func != nil && (!a.Failed || a.IgnoreFail) {
+		if a.Actor != nil && (!a.Failed || a.IgnoreFail) {
 			// TODO(matloob): Better action descriptions
 			desc := "Executing action "
 			if a.Package != nil {
@@ -140,7 +140,7 @@ func (b *Builder) Do(ctx context.Context, root *Action) {
 			for _, d := range a.Deps {
 				trace.Flow(ctx, d.traceSpan, a.traceSpan)
 			}
-			err = a.Func(b, ctx, a)
+			err = a.Actor.Act(b, ctx, a)
 			span.Done()
 		}
 		if a.json != nil {
@@ -382,6 +382,9 @@ func (b *Builder) buildActionID(a *Action) cache.ActionID {
 	)
 	for _, file := range inputFiles {
 		fmt.Fprintf(h, "file %s %s\n", file, b.fileHash(filepath.Join(p.Dir, file)))
+	}
+	if cfg.BuildPGOFile != "" {
+		fmt.Fprintf(h, "pgofile %s\n", b.fileHash(cfg.BuildPGOFile))
 	}
 	for _, a1 := range a.Deps {
 		p1 := a1.Package
