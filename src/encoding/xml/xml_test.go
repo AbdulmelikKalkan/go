@@ -916,6 +916,35 @@ func TestIssue5880(t *testing.T) {
 	}
 }
 
+func TestIssue8068(t *testing.T) {
+	emptyError := SyntaxError{}
+	noError := emptyError.Error()
+	testCases := []struct {
+		s       string
+		wantErr SyntaxError
+	}{
+		{`<foo xmlns:bar="a"></foo>`, SyntaxError{}},
+		{`<foo xmlns:bar=""></foo>`, SyntaxError{Msg: "empty namespace with prefix", Line: 1}},
+		{`<foo xmlns:="a"></foo>`, SyntaxError{}},
+		{`<foo xmlns:""></foo>`, SyntaxError{Msg: "attribute name without = in element", Line: 1}},
+		{`<foo xmlns:"a"></foo>`, SyntaxError{Msg: "attribute name without = in element", Line: 1}},
+	}
+	var dest string
+	for _, tc := range testCases {
+		if got, want := Unmarshal([]byte(tc.s), &dest), tc.wantErr.Error(); got == nil {
+			if want != noError {
+				t.Errorf("%q: got nil, want %s", tc.s, want)
+			}
+		} else {
+			if want == "" {
+				t.Errorf("%q: got %s, want nil", tc.s, got)
+			} else if got.Error() != want {
+				t.Errorf("%q: got %s, want %s", tc.s, got, want)
+			}
+		}
+	}
+}
+
 func TestIssue8535(t *testing.T) {
 
 	type ExampleConflict struct {
@@ -1055,6 +1084,40 @@ func TestIssue12417(t *testing.T) {
 		}
 		if err == nil && !tc.ok {
 			t.Errorf("%q: Encoding charset: expected error, got nil", tc.s)
+		}
+	}
+}
+
+func TestIssue20396(t *testing.T) {
+
+	var attrError = UnmarshalError("XML syntax error on line 1: expected attribute name in element")
+
+	testCases := []struct {
+		s       string
+		wantErr error
+	}{
+		{`<a:te:st xmlns:a="abcd"/>`, // Issue 20396
+			UnmarshalError("XML syntax error on line 1: expected element name after <")},
+		{`<a:te=st xmlns:a="abcd"/>`, attrError},
+		{`<a:te&st xmlns:a="abcd"/>`, attrError},
+		{`<a:test xmlns:a="abcd"/>`, nil},
+		{`<a:te:st xmlns:a="abcd">1</a:te:st>`,
+			UnmarshalError("XML syntax error on line 1: expected element name after <")},
+		{`<a:te=st xmlns:a="abcd">1</a:te=st>`, attrError},
+		{`<a:te&st xmlns:a="abcd">1</a:te&st>`, attrError},
+		{`<a:test xmlns:a="abcd">1</a:test>`, nil},
+	}
+
+	var dest string
+	for _, tc := range testCases {
+		if got, want := Unmarshal([]byte(tc.s), &dest), tc.wantErr; got != want {
+			if got == nil {
+				t.Errorf("%s: Unexpected success, want %v", tc.s, want)
+			} else if want == nil {
+				t.Errorf("%s: Unexpected error, got %v", tc.s, got)
+			} else if got.Error() != want.Error() {
+				t.Errorf("%s: got %v, want %v", tc.s, got, want)
+			}
 		}
 	}
 }
@@ -1228,9 +1291,7 @@ func testRoundTrip(t *testing.T, input string) {
 
 func TestRoundTrip(t *testing.T) {
 	tests := map[string]string{
-		"leading colon":          `<::Test ::foo="bar"><:::Hello></:::Hello><Hello></Hello></::Test>`,
 		"trailing colon":         `<foo abc:="x"></foo>`,
-		"double colon":           `<x:y:foo></x:y:foo>`,
 		"comments in directives": `<!ENTITY x<!<!-- c1 [ " -->--x --> > <e></e> <!DOCTYPE xxx [ x<!-- c2 " -->--x ]>`,
 	}
 	for name, input := range tests {
