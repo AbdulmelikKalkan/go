@@ -281,8 +281,33 @@ proxyHandler := &httputil.ReverseProxy{
   TODO: complete this section
 </p>
 
+<dl id="archive/tar"><dt><a href="/pkg/archive/tar/">archive/tar</a></dt>
+  <dd>
+    <p><!-- https://go.dev/issue/55356 -->
+      <code>(*Reader).Next</code> will now return the error <code>ErrInsecurePath</code>
+      when opening an archive which contains file names that are absolute,
+      refer to a location outside the current directory, contain invalid
+      characters, or (on Windows) are reserved names such as <code>NUL</code>.
+    </p>
+    <p>
+      Programs that want to operate on archives containing insecure file names may
+      ignore this error.
+    </p>
+  </dd>
+</dl><!-- archive/tar -->
+
 <dl id="archive/zip"><dt><a href="/pkg/archive/zip/">archive/zip</a></dt>
   <dd>
+    <p><!-- https://go.dev/issue/55356 -->
+      <code>NewReader</code> will now return the error <code>ErrInsecurePath</code>
+      when opening an archive which contains file names that are absolute,
+      refer to a location outside the current directory, contain invalid
+      characters, or (on Windows) are reserved names such as <code>NUL</code>.
+    </p>
+    <p>
+      Programs that want to operate on archives containing insecure file names may
+      ignore this error.
+    </p>
     <p><!-- CL 449955 -->
       Reading from a directory file that contains file data will now return an error.
       The zip specification does not permit directory files to contain file data,
@@ -664,6 +689,13 @@ proxyHandler := &httputil.ReverseProxy{
   <dd>
     <p><!-- CL 363814 --><!-- https://go.dev/issue/47209 -->
       TODO: <a href="https://go.dev/cl/363814">https://go.dev/cl/363814</a>: path/filepath, io/fs: add SkipAll; modified api/next/47209.txt
+    </p>
+    <p><!-- https://go.dev/issue/56219 -->
+      The new <code>IsLocal</code> function reports whether a path is
+      lexically local to a directory.
+      For example, if <code>IsLocal(p)</code> is <code>true</code>,
+      then <code>Open(p)</code> will refer to a file that is lexically
+      within the subtree rooted at the current directory.
     </p>
   </dd>
 </dl><!-- io -->

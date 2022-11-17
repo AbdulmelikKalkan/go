@@ -14,6 +14,7 @@ import (
 	"internal/cfg"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -148,7 +149,28 @@ func defaultContext() build.Context {
 		// go/build.Default.GOOS/GOARCH == runtime.GOOS/GOARCH.
 		// So ctxt.CgoEnabled (== go/build.Default.CgoEnabled) is correct
 		// as is and can be left unmodified.
-		// Nothing to do here.
+		//
+		// All that said, starting in Go 1.20 we layer one more rule
+		// on top of the go/build decision: if CC is unset and
+		// the default C compiler we'd look for is not in the PATH,
+		// we automatically default cgo to off.
+		// This makes go builds work automatically on systems
+		// without a C compiler installed.
+		if ctxt.CgoEnabled {
+			if os.Getenv("CC") == "" {
+				cc := DefaultCC(ctxt.GOOS, ctxt.GOARCH)
+				if filepath.IsAbs(cc) {
+					if _, err := os.Stat(cc); os.IsNotExist(err) {
+						// The default CC is an absolute path that doesn't exist.
+						// (Perhaps make.bash was run on a system with a C compiler
+						// installed, and the current system doesn't have it there.)
+						ctxt.CgoEnabled = false
+					}
+				} else if _, err := exec.LookPath(cc); err != nil {
+					ctxt.CgoEnabled = false
+				}
+			}
+		}
 	}
 
 	ctxt.OpenFile = func(path string) (io.ReadCloser, error) {
