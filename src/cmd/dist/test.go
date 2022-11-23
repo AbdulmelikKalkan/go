@@ -159,7 +159,7 @@ func (t *tester) run() {
 	}
 
 	if !t.listMode {
-		if os.Getenv("GO_BUILDER_NAME") == "" {
+		if builder := os.Getenv("GO_BUILDER_NAME"); builder == "" {
 			// Complete rebuild bootstrap, even with -no-rebuild.
 			// If everything is up-to-date, this is a no-op.
 			// If everything is not up-to-date, the first checkNotStale
@@ -185,7 +185,15 @@ func (t *tester) run() {
 			// running dist test, so rebuild (but don't install) std and cmd to make
 			// sure packages without install targets are cached so they are not stale.
 			goCmd("go", "build", "std", "cmd") // make sure dependencies of targets are cached
-			checkNotStale("go", "std", "cmd")
+			if builder == "aix-ppc64" {
+				// The aix-ppc64 builder for some reason does not have deterministic cgo
+				// builds, so "cmd" is stale. Fortunately, most of the tests don't care.
+				// TODO(#56896): remove this special case once the builder supports
+				// determistic cgo builds.
+				checkNotStale("go", "std")
+			} else {
+				checkNotStale("go", "std", "cmd")
+			}
 		}
 	}
 
@@ -1594,6 +1602,13 @@ func (t *tester) registerRaceTests() {
 		// t.registerTest("race:misc/cgo/test", hdr, &goTest{dir: "../misc/cgo/test", race: true, env: []string{"GOTRACEBACK=2"}})
 	}
 	if t.extLink() {
+		var oldWindows rtPreFunc
+		if strings.HasPrefix(os.Getenv("GO_BUILDER_NAME"), "windows-amd64-2008") {
+			oldWindows.pre = func(*distTest) bool {
+				fmt.Println("skipping -race with external linkage on older windows builder, see https://github.com/golang/go/issues/56904 for details")
+				return false
+			}
+		}
 		// Test with external linking; see issue 9133.
 		t.registerTest("race:external", hdr,
 			&goTest{
@@ -1601,7 +1616,7 @@ func (t *tester) registerRaceTests() {
 				ldflags:  "-linkmode=external",
 				runTests: "TestParse|TestEcho|TestStdinCloseRace",
 				pkgs:     []string{"flag", "os/exec"},
-			})
+			}, oldWindows)
 	}
 }
 
