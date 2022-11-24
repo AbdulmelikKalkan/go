@@ -26,25 +26,42 @@ Do not send CLs removing the interior tags from such phrases.
 <h2 id="language">Changes to the language</h2>
 
 <p>
-  TODO: complete this section
-</p>
-
-<p><!-- https://go.dev/issue/8606 -->
-  TODO: <a href="https://go.dev/issue/8606">https://go.dev/issue/8606</a>: define that structs are compared field-by-field as listed in source code
+  Go 1.20 includes three changes to the language.
 </p>
 
 <p><!-- https://go.dev/issue/46505 -->
-  TODO: <a href="https://go.dev/issue/46505">https://go.dev/issue/46505</a>: allow conversion from slice to array
+  Go 1.17 added <a href="/ref/spec#Conversions_from_slice_to_array_pointer">conversions from slice to an array pointer</a>.
+  Go 1.20 extends this to allow conversions from a slice to an array:
+  given a slice <code>x</code>, <code>[4]byte(x)</code> can now be written
+  instead of <code>*(*[4]byte)(x)</code>.
+</p>
+
+<p><!-- https://go.dev/issue/53003 -->
+  The <a href="/ref/spec/#Package_unsafe"><code>unsafe</code> package</a> defines
+  three new functions <code>SliceData</code>, <code>String</code>, and <code>StringData</code>.
+  Along with Go 1.17's <code>Slice</code>, these functions now provide the complete ability to
+  construct and deconstruct slice and string values, without depending on their exact representation.
+</p>
+
+<p><!-- https://go.dev/issue/8606 -->
+  The specification now defines that struct values are compared one field at a time,
+  considering fields in the order they appear in the struct type definition,
+  and stopping at the first mismatch.
+  The specification could previously have been read as if
+  all fields needed to be compared beyond the first mismatch.
+  Similarly, the specification now defines that array values are compared
+  one element at a time, in increasing index order.
+  In both cases, the difference affects whether certain comparisons must panic.
+  Existing programs are unchanged: the new spec wording describes
+  what the implementations have always done.
 </p>
 
 <h2 id="ports">Ports</h2>
 
-<p>
-  TODO: complete this section, or delete if not needed
-</p>
+<h3 id="freebsd-riscv">FreeBSD/RISC-V</h3>
 
 <p><!-- https://go.dev/issue/53466 -->
-  TODO: <a href="https://go.dev/issue/53466">https://go.dev/issue/53466</a>: add freebsd/riscv64 port
+  Go 1.20 adds experimental support for FreeBSD on RISC-V (<code>GOOS=freebsd</code>, <code>GOARCH=riscv64</code>).
 </p>
 
 <h2 id="tools">Tools</h2>
@@ -84,7 +101,7 @@ Do not send CLs removing the interior tags from such phrases.
   the packages named on the command line.
 </p>
 
-<p><!-- https://go.dev/issue/45454 -->
+<p><!-- https://go.dev/issue/45454 --><!-- CL 421434 -->
   The <code>go</code> command now defines
   architecture feature build tags, such as <code>amd64.v2</code>,
   to allow selecting a package implementation file based on the presence
@@ -186,12 +203,6 @@ Do not send CLs removing the interior tags from such phrases.
 
 <h3 id="vet">Vet</h3>
 
-<h4 id="vet-timeformat">New diagnostic for incorrect time formats</h4>
-
-<p><!-- https://go.dev/issue/48801, CL 354010 -->
-  TODO: <a href="https://go.dev/issue/48801">https://go.dev/issue/48801</a>: check for time formats with 2006-02-01
-</p>
-
 <h4 id="vet-loopclosure">Improved detection of loop variable capture by nested functions</h4>
 
 <p><!-- CL 447256 --><!-- https://go.dev/issue/55972: extend the loopclosure analysis to parallel subtests -->
@@ -206,6 +217,17 @@ Do not send CLs removing the interior tags from such phrases.
   The tool also detects reference mistakes in more places. Previously it would
   only consider the last statement of the loop body, but now it recursively
   inspects the last statements within if, switch, and select statements.
+</p>
+
+<h4 id="vet-timeformat">New diagnostic for incorrect time formats</h4>
+
+<p><!-- CL 354010 --><!-- https://go.dev/issue/48801: check for time formats with 2006-02-01 -->
+  The vet tool now reports use of the time format 2006-02-01 (yyyy-dd-mm)
+  with <a href="/pkg/time/#Time.Format"><code>Time.Format</code></a> and
+  <a href="/pkg/time/#Parse"><code>time.Parse</code></a>.
+  This format does not appear in common date standards, but is frequently
+  used by mistake when attempting to use the ISO 8601 date format
+  (yyyy-mm-dd).
 </p>
 
 <h2 id="runtime">Runtime</h2>
@@ -308,7 +330,7 @@ func RequestHandler(w ResponseWriter, r *Request) {
 
 <h3 id="reverseproxy_rewrite">New ReverseProxy Rewrite hook</h3>
 
-<p>
+<p><!-- https://go.dev/issue/53002 -->
   The <a href="/pkg/net/http/httputil/#ReverseProxy"><code>httputil.ReverseProxy</code></a>
   forwarding proxy includes a new <code>Rewrite</code> hook function, superseding the
   previous <code>Director</code> hook.
@@ -334,7 +356,7 @@ func RequestHandler(w ResponseWriter, r *Request) {
   also sets the <code>Host</code> header of the outbound request.
 </p>
 
-<p>
+<p><!-- https://go.dev/issue/50465 -->
   The
   <a href="/pkg/net/http/httputil/#ProxyRequest.SetXForwarded"><code>ProxyRequest.SetXForwarded</code></a>
   method sets the <code>X-Forwarded-For</code>, <code>X-Forwarded-Host</code>,
@@ -356,6 +378,11 @@ proxyHandler := &httputil.ReverseProxy{
 }
 </pre>
 
+<p><!-- CL 407375 -->
+ <a href="/pkg/net/http/httputil/#ReverseProxy"><code>ReverseProxy</code></a> no longer adds a <code>User-Agent</code> header
+  to forwarded requests when the incoming request does not have one.
+</p>
+
 <h3 id="minor_library_changes">Minor changes to the library</h3>
 
 <p>
@@ -372,14 +399,13 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="archive/tar"><dt><a href="/pkg/archive/tar/">archive/tar</a></dt>
   <dd>
     <p><!-- https://go.dev/issue/55356 -->
-      When the <code>GODEBUG=tarinsecurepath=0</code> environment variable
-      is set, <code>(*Reader).Next</code> will return the error
-      <code>ErrInsecurePath</code> when opening an archive which contains
-      file names that are absolute, refer to a location outside the current
-      directory, contain invalid characters, or (on Windows) are reserved
-      names such as <code>NUL</code>. Programs that perform their own
-      name sanitization can ignore this error. This behavior will be made
-      the default in a future version of Go.
+      When the <code>GODEBUG=tarinsecurepath=0</code> environment variable is set,
+      <a href="/pkg/archive/tar/#Reader.Next"><code>Reader.Next</code></a> method
+      will now return the error <a href="/pkg/archive/tar/#ErrInsecurePath"><code>ErrInsecurePath</code></a>
+      for an entry with a file name that is an absolute path,
+      refers to a location outside the current directory, contains invalid
+      characters, or (on Windows) is a reserved name such as <code>NUL</code>.
+      A future version of Go may disable insecure paths by default.
     </p>
   </dd>
 </dl><!-- archive/tar -->
@@ -387,14 +413,13 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="archive/zip"><dt><a href="/pkg/archive/zip/">archive/zip</a></dt>
   <dd>
     <p><!-- https://go.dev/issue/55356 -->
-      When the <code>GODEBUG=zipinsecurepath=0</code> environment variable
-      is set, <code>NewReader</code> will return the error
-      <code>ErrInsecurePath</code> when opening an archive which contains
-      file names that are absolute, refer to a location outside the current 
-      irectory, contain invalid characters, or (on Windows) are reserved
-      names such as <code>NUL</code>. Programs that perform their own
-      name sanitization can ignore this error. This behavior will be made
-      the default in a future version of Go.
+      When the <code>GODEBUG=zipinsecurepath=0</code> environment variable is set,
+      <a href="/pkg/archive/zip/#NewReader"><code>NewReader</code></a> will now return the error
+      <a href="/pkg/archive/zip/#ErrInsecurePath"><code>ErrInsecurePath</code></a>
+      when opening an archive which contains any file name that is an absolute path,
+      refers to a location outside the current directory, contains invalid
+      characters, or (on Windows) is a reserved names such as <code>NUL</code>.
+      A future version of Go may disable insecure paths by default.
     </p>
     <p><!-- CL 449955 -->
       Reading from a directory file that contains file data will now return an error.
@@ -407,11 +432,17 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="bytes"><dt><a href="/pkg/bytes/">bytes</a></dt>
   <dd>
     <p><!-- CL 407176 -->
-      TODO: <a href="https://go.dev/cl/407176">https://go.dev/cl/407176</a>: strings, bytes: add CutPrefix and CutSuffix
+      The new
+      <a href="/pkg/bytes/#CutPrefix"><code>CutPrefix</code></a> and
+      <a href="/pkg/bytes/#CutSuffix"><code>CutSuffix</code></a> functions
+      are like <a href="/pkg/bytes/#TrimPrefix"><code>TrimPrefix</code></a>
+      and <a href="/pkg/bytes/#TrimSuffix"><code>TrimSuffix</code></a>
+      but also report whether the string was trimmed.
     </p>
 
     <p><!-- CL 359675 -->
-      TODO: <a href="https://go.dev/cl/359675">https://go.dev/cl/359675</a>: bytes: add Clone function
+      The new <a href="/pkg/bytes/#Clone"><code>Clone</code></a> function
+      allocates a copy of a byte slice.
     </p>
   </dd>
 </dl><!-- bytes -->
@@ -512,20 +543,20 @@ proxyHandler := &httputil.ReverseProxy{
 
 <dl id="encoding/xml"><dt><a href="/pkg/encoding/xml/">encoding/xml</a></dt>
   <dd>
-    <p><!-- https://go.dev/issue/53346 -->
-      TODO: <a href="https://go.dev/issue/53346">https://go.dev/issue/53346</a>: Add (*Encoder).Close() to check for unclosed elements
+    <p><!-- https://go.dev/issue/53346 --><!-- CL 424777 -->
+      The new <a href="/pkg/encoding/xml/#Encoder.Close"><code>Encoder.Close</code></a> method
+      can be used to check for unclosed elements when finished encoding.
     </p>
 
-    <p><!-- CL 424777 -->
-      TODO: <a href="https://go.dev/cl/424777">https://go.dev/cl/424777</a>: encoding/xml: add (*Encoder).Close
-    </p>
-
-    <p><!-- CL 103875 -->
-      TODO: <a href="https://go.dev/cl/103875">https://go.dev/cl/103875</a>: encoding/xml: error when more than one colon in qualified names
+    <p><!-- CL 103875 --><!-- CL 105636 -->
+      The decoder now rejects element and attribute names with more than one colon,
+      such as <code>&lt;a:b:c&gt;</code>,
+      as well as namespaces that resolve to an empty string, such as <code>xmlns:a=""</code>.
     </p>
 
     <p><!-- CL 107255 -->
-      TODO: <a href="https://go.dev/cl/107255">https://go.dev/cl/107255</a>: encoding/xml: error when closing tag does not match opening tag
+      The decoder now rejects elements that use different namespace prefixes in the opening and closing tag,
+      even if those prefixes both denote the same namespace.
     </p>
   </dd>
 </dl><!-- encoding/xml -->
@@ -533,7 +564,7 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="errors"><dt><a href="/pkg/errors/">errors</a></dt>
   <dd>
     <p><!-- https://go.dev/issue/53435 -->
-      The new <code>Join</code> function returns an error wrapping a list of errors.
+      The new <a href="/pkg/errors/#Join"><code>Join</code></a> function returns an error wrapping a list of errors.
     </p>
   </dd>
 </dl><!-- errors -->
@@ -541,15 +572,14 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="fmt"><dt><a href="/pkg/fmt/">fmt</a></dt>
   <dd>
     <p><!-- https://go.dev/issue/53435 -->
-      The <code>Errorf</code> function supports multiple occurrances of
-      the <code>%w</code> format verb.
+      The <a href="/pkg/fmt/#Errorf"><code>Errorf</code></a> function supports multiple occurrences of
+      the <code>%w</code> format verb, returning an error that unwraps to the list of all arguments to <code>%w</code>.
     </p>
-    <p><!-- https://go.dev/issue/51668 -->
-      TODO: <a href="https://go.dev/issue/51668">https://go.dev/issue/51668</a>: add FormatString(State) string
-    </p>
-
-    <p><!-- CL 400875 -->
-      TODO: <a href="https://go.dev/cl/400875">https://go.dev/cl/400875</a>: fmt: add a function to recover the original format string given a State; modified api/next/51668.txt
+    <p><!-- https://go.dev/issue/51668 --><!-- CL 400875 -->
+      The new <a href="/pkg/fmt/#FormatString"><code>FormatString</code></a> function recovers the
+      formatting directive corresponding to a <a href="/pkg/fmt/#State"><code>State</code></a>,
+      which can be useful in <a href="/pkg/fmt/#Formatter"><code>Formatter</code></a>.
+      implementations.
     </p>
   </dd>
 </dl><!-- fmt -->
@@ -566,14 +596,6 @@ proxyHandler := &httputil.ReverseProxy{
   </dd>
 </dl><!-- go/ast -->
 
-<dl id="go/build"><dt><a href="/pkg/go/build/">go/build</a></dt>
-  <dd>
-    <p><!-- CL 421434 -->
-      TODO: <a href="https://go.dev/cl/421434">https://go.dev/cl/421434</a>: go/build: add GO$GOARCH-based ToolTags
-    </p>
-  </dd>
-</dl><!-- go/build -->
-
 <dl id="go/token"><dt><a href="/pkg/go/token/">go/token</a></dt>
   <dd>
     <p><!-- CL 410114 -->
@@ -584,20 +606,21 @@ proxyHandler := &httputil.ReverseProxy{
 
 <dl id="io"><dt><a href="/pkg/io/">io</a></dt>
   <dd>
-    <p><!-- https://go.dev/issue/45899 -->
-      TODO: <a href="https://go.dev/issue/45899">https://go.dev/issue/45899</a>: add OffsetWriter, NewOffsetWriter
-    </p>
-
-    <p><!-- CL 406776 -->
-      TODO: <a href="https://go.dev/cl/406776">https://go.dev/cl/406776</a>: io: add OffsetWriter, NewOffsetWriter; modified api/next/45899.txt
+    <p><!-- https://go.dev/issue/45899 --><!-- CL 406776 -->
+      The new <a href="/pkg/io/#OffsetWriter"><code>OffsetWriter</code></a> wraps an underlying
+      <a href="/pkg/io/#WriterAt"><code>WriterAt</code></a>
+      and provides <code>Seek</code>, <code>Write</code>, and <code>WriteAt</code> methods
+      that adjust their effective file offset position by a fixed amount.
     </p>
   </dd>
 </dl><!-- io -->
 
 <dl id="io/fs"><dt><a href="/pkg/io/fs/">io/fs</a></dt>
   <dd>
-    <p><!-- CL 363814 -->
-      TODO: <a href="https://go.dev/cl/363814">https://go.dev/cl/363814</a>: path/filepath, io/fs: add SkipAll; modified api/next/47209.txt
+    <p><!-- CL 363814 --><!-- https://go.dev/issue/47209 -->
+      The new error <a href="/pkg/io/fs/#SkipAll"><code>SkipAll</code></a>
+      terminates a <a href="/pkg/io/fs/#WalkDir"><code>WalkDir</code></a>
+      immediately but successfully.
     </p>
   </dd>
 </dl><!-- io -->
@@ -622,7 +645,7 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="mime"><dt><a href="/pkg/mime/">mime</a></dt>
   <dd>
     <p><!-- https://go.dev/issue/48866 -->
-      The <code>ParseMediaType</code> function now allows duplicate parameter names,
+      The <a href="/pkg/mime/#ParseMediaType"><code>ParseMediaType</code></a> function now allows duplicate parameter names,
       so long as the values of the names are the same.
     </p>
   </dd>
@@ -631,7 +654,7 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="mime/multipart"><dt><a href="/pkg/mime/multipart/">mime/multipart</a></dt>
   <dd>
     <p><!-- CL 431675 -->
-      Methods of the <code>Reader</code> type now wrap errors
+      Methods of the <a href="/pkg/mime/multipart/#Reader"><code>Reader</code></a> type now wrap errors
       returned by the underlying <code>io.Reader</code>.
     </p>
   </dd>
@@ -640,7 +663,8 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="net"><dt><a href="/pkg/net/">net</a></dt>
   <dd>
     <p><!-- https://go.dev/issue/50101 -->
-      The <code>LookupCNAME</code> function now consistently returns the contents
+      The <a href="/pkg/net/#LookupCNAME"><code>LookupCNAME</code></a>
+      function now consistently returns the contents
       of a <code>CNAME</code> record when one exists. Previously on Unix systems and
       when using the pure Go resolver, <code>LookupCNAME</code> would return an error
       if a <code>CNAME</code> record referred to a name that with no <code>A</code>,
@@ -651,15 +675,15 @@ proxyHandler := &httputil.ReverseProxy{
     </p>
 
     <p><!-- https://go.dev/issue/53482 -->
-      <code>Interface.Flags</code> now includes the new flag <code>FlagRunning</code>,
+      <a href="/pkg/net/#Interface.Flags"><code>Interface.Flags</code></a> now includes the new flag <code>FlagRunning</code>,
       indicating an operationally active interface. An interface which is administratively
       configured but not active (for example, because the network cable is not connected)
       will have <code>FlagUp</code> set but not <code>FlagRunning</code>.
     </p>
 
     <p><!-- https://go.dev/issue/55301 -->
-      The new <code>Dialer.ControlContext</code> field contains a callback function
-      similar to the existing <code>Dialer.Control</code> hook, that additionally
+      The new <a href="/pkg/net/#Dialer.ControlContext"><code>Dialer.ControlContext</code></a> field contains a callback function
+      similar to the existing <a href="/pkg/net/#Dialer.Control"><code>Dialer.Control</code></a> hook, that additionally
       accepts the dial context as a parameter.
       <code>Control</code> is ignored when <code>ControlContext</code> is not nil.
     </p>
@@ -683,28 +707,28 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="net/http"><dt><a href="/pkg/net/http/">net/http</a></dt>
   <dd>
     <p><!-- https://go.dev/issue/541360 -->
-      The new <code>ResponseController</code> type provides access to extended per-request
-      functionality not handled by the <code>ResponseWriter<code> interface.
+      The new <a href="/pkg/net/http/#ResponseController"><code>ResponseController</code></a> type provides access to extended per-request
+      functionality not handled by the <a href="/pkg/net/http/#ResponseWriter"><code>ResponseWriter<code></a> interface.
     <p>
 
     <p>
-      The new <code>ResponseController.SetReadDeadline</code> and
-      <code>ResponseController.SetWriteDeadline</code> methods permit setting
+      The new <a href="/pkg/net/http/#ResponseController.SetReadDeadline"><code>ResponseController.SetReadDeadline</code></a> and
+      <a href="/pkg/net/http/#ResponseController.SetWriteDeadline"><code>ResponseController.SetWriteDeadline</code></a> methods permit setting
       per-request read and write deadlines.
     </p>
 
     <p><!-- https://go.dev/issue/51914 -->
-      The <code>ResponseWriter.WriteHeader</code> function now supports sending
+      The <a href="/pkg/net/http/#ResponseWriter.WriteHeader"><code>ResponseWriter.WriteHeader</code></a> function now supports sending
       <code>1xx</code> status codes.
     </p>
 
     <p><!-- https://go.dev/issue/41773 -->
-      The new <code>Server.DisableGeneralOptionsHandler</code> configuration setting
+      The new <a href="/pkg/net/http/#Server.DisableGeneralOptionsHandler"><code>Server.DisableGeneralOptionsHandler</code></a> configuration setting
       allows disabling the default <code>OPTIONS *</code> handler.
     </p>
 
     <p><!-- https://go.dev/issue/54299 -->
-      The new <code>Transport.OnProxyConnectResponse</code> hook is called
+      The new <a href="/pkg/net/http/#Transport.OnProxyConnectResponse"><code>Transport.OnProxyConnectResponse</code></a> hook is called
       when a <code>Transport</code> receives an HTTP response from a proxy
       for a <code>CONNECT</code> request.
     </p>
@@ -716,7 +740,8 @@ proxyHandler := &httputil.ReverseProxy{
 
     <p><!-- https://go.dev/issue/53896 -->
       HTTP/2 stream errors returned by <code>net/http</code> functions may be converted
-      to a <code>"golang.org/x/net/http2".StreamError</code> using <code>errors.As</code>.
+      to a <a href="/pkg/golang.org/x/net/http2/#StreamError"><code>golang.org/x/net/http2.StreamError</code></a> using
+      <a href="/pkg/errors/#As"><code>errors.As</code></a>.
     </p>
 
     <p><!-- https://go.dev/cl/397734 -->
@@ -728,40 +753,14 @@ proxyHandler := &httputil.ReverseProxy{
   </dd>
 </dl><!-- net/http -->
 
-<dl id="net/http/httputil"><dt><a href="/pkg/net/http/httputil/">net/http/httputil</a></dt>
-  <dd>
-    <p><!-- https://go.dev/issue/53002 -->
-      The new <code>ReverseProxy</code> hook supersedes the existing <code>Rewrite</code> hook.
-    </p>
-
-    <p><!-- https://go.dev/issue/50465 -->
-      <code>ReverseProxy</code> now adds
-      <code>X-Forwarded-Proto</code> and <code>X-Forwarded-Host</code> headers
-      to forwarded requests.
-      These headers are added to all requests forwarded by a <code>Director</code> hook,
-      and to requests forwarded by a <code>Rewrite</code> hook which calls the
-      <code>ProxyRequest.SetXForwarded</code> function.
-    </p>
-
-    <p><!-- CL 407375 -->
-      <code>ReverseProxy</code> no longer adds a <code>User-Agent</code> header
-      to forwarded requests when the incoming request does not have one.
-    </p>
-  </dd>
-</dl><!-- net/http/httputil -->
-
 <dl id="net/netip"><dt><a href="/pkg/net/netip/">net/netip</a></dt>
   <dd>
-    <p><!-- https://go.dev/issue/51766 -->
-      TODO: <a href="https://go.dev/issue/51766">https://go.dev/issue/51766</a>: add IPv6LinkLocalAllRouters
-    </p>
-
-    <p><!-- https://go.dev/issue/51777 -->
-      TODO: <a href="https://go.dev/issue/51777">https://go.dev/issue/51777</a>: add IPv6Loopback
-    </p>
-
-    <p><!-- CL 412475 -->
-      TODO: <a href="https://go.dev/cl/412475">https://go.dev/cl/412475</a>: net/netip: add IPv6LinkLocalAllRouters and IPv6Loopback; modified api/next/51766.txt, api/next/51777.txt
+    <p><!-- https://go.dev/issue/51766 --><!-- https://go.dev/issue/51777 --><!-- CL 412475 -->
+      The new <a href="/pkg/net/netip/#IPv6LinkLocalAllRouters">IPv6LinkLocalAllRouters</a>
+      and <a href="/pkg/net/netip/#IPv6Loopback">IPv6Loopback</a> functions
+      are the <code>net/netip</code> equivalents of
+      <a href="/pkg/net/#IPv6loopback"><code>net.IPv6loopback</code></a> and
+      <a href="/pkg/net/#IPv6linklocalallrouters"><code>net.IPv6linklocalallrouters</code></a>.
     </p>
   </dd>
 </dl><!-- net/netip -->
@@ -771,13 +770,28 @@ proxyHandler := &httputil.ReverseProxy{
     <p><!-- CL 448897 -->
       TODO: <a href="https://go.dev/cl/448897">https://go.dev/cl/448897</a>: os: remove special casing of NUL in Windows file operations
     </p>
+    <p><!-- https://go.dev/issue/52747, CL 405275 -->
+      On Windows, <a href="/pkg/os/#File.Stat"><code>File.Stat</code></a>
+      now uses the file handle to retrieve attributes when the file is a directory.
+      Previously it would use the path passed to
+      <a href="/pkg/os/#Open"><code>Open</code></a>, which may no longer be the file
+      represented by the file handle if the file has been moved or replaced.
+      This change modifies <code>Open</code> to open directories without the
+      <code>FILE_SHARE_DELETE</code> access, which match the behavior of regular files.
+    </p>
+    <p><!-- https://go.dev/issue/36019, CL 405275 -->
+      On Windows, <a href="/pkg/os/#File.Seek"><code>File.Seek</code></a> now supports
+      seeking to the beginning of a directory.
+    </p>
   </dd>
 </dl><!-- os -->
 
 <dl id="os/exec"><dt><a href="/pkg/os/exec/">os/exec</a></dt>
   <dd>
     <p><!-- https://go.dev/issue/50436, CL 401835 -->
-      The new <code>Cmd</code> fields <code>Cancel</code> and <code>WaitDelay</code>
+      The new <a href="/pkg/os/exec/#Cmd"><code>Cmd</code></a> fields
+      <a href="/pkg/os/exec/#Cmd.Cancel"><code>Cancel</code></a> and
+      <a href="/pkg/os/exec/#Cmd.WaitDelay"><code>WaitDelay</code></a>
       specify the behavior of the <code>Cmd</code> when its associated
       <code>Context</code> is canceled or its process exits with I/O pipes still
       held open by a child process.
@@ -788,10 +802,12 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="path/filepath"><dt><a href="/pkg/path/filepath/">path/filepath</a></dt>
   <dd>
     <p><!-- CL 363814 --><!-- https://go.dev/issue/47209 -->
-      TODO: <a href="https://go.dev/cl/363814">https://go.dev/cl/363814</a>: path/filepath, io/fs: add SkipAll; modified api/next/47209.txt
+      The new error <a href="/pkg/path/filepath/#SkipAll"><code>SkipAll</code></a>
+      terminates a <a href="/pkg/path/filepath/#Walk"><code>Walk</code></a>
+      immediately but successfully.
     </p>
     <p><!-- https://go.dev/issue/56219 -->
-      The new <code>IsLocal</code> function reports whether a path is
+      The new <a href="/pkg/path/filepath/#IsLocal"><code>IsLocal</code></a> function reports whether a path is
       lexically local to a directory.
       For example, if <code>IsLocal(p)</code> is <code>true</code>,
       then <code>Open(p)</code> will refer to a file that is lexically
@@ -802,36 +818,29 @@ proxyHandler := &httputil.ReverseProxy{
 
 <dl id="reflect"><dt><a href="/pkg/reflect/">reflect</a></dt>
   <dd>
-    <p><!-- https://go.dev/issue/46746 -->
-      TODO: <a href="https://go.dev/issue/46746">https://go.dev/issue/46746</a>: add Value.Equal, Value.Comparable
+    <p><!-- https://go.dev/issue/46746 --><!-- CL 423794 -->
+      The new <a href="/pkg/reflect/#Value.Comparable"><code>Value.Comparable</code></a> and
+      <a href="/pkg/reflect/#Value.Equal"><code>Value.Equal</code></a> methods
+      can be used to compare two <code>Value</code>s for equality.
+      <code>Comparable</code> reports whether <code>Equal</code> is a valid operation for a given <code>Value</code> receiver.
     </p>
 
-    <p><!-- https://go.dev/issue/48000 -->
-      TODO: <a href="https://go.dev/issue/48000">https://go.dev/issue/48000</a>: add reflect.Value.Grow
+    <p><!-- https://go.dev/issue/48000 --><!-- CL 389635 -->
+      The new <a href="/pkg/reflect/#Value.Grow"><code>Value.Grow</code></a> method
+      extends a slice to guarantee space for another <code>n</code> elements.
     </p>
 
-    <p><!-- https://go.dev/issue/52376 -->
-      TODO: <a href="https://go.dev/issue/52376">https://go.dev/issue/52376</a>: add Value.SetZero
-    </p>
-
-    <p><!-- CL 389635 -->
-      TODO: <a href="https://go.dev/cl/389635">https://go.dev/cl/389635</a>: reflect: add Value.Grow
-    </p>
-
-    <p><!-- CL 411476 -->
-      TODO: <a href="https://go.dev/cl/411476">https://go.dev/cl/411476</a>: reflect: add Value.SetZero
-    </p>
-
-    <p><!-- CL 423794 -->
-      TODO: <a href="https://go.dev/cl/423794">https://go.dev/cl/423794</a>: reflect: add Value.{Comparable,Equal}
+    <p><!-- https://go.dev/issue/52376 --><!-- CL 411476 -->
+      The new <a href="/pkg/reflect/#Value.SetZero"><code>Value.SetZero</code></a> method
+      sets a value to be the zero value for its type.
     </p>
 
     <p><!-- CL 425184 -->
-      TODO: <a href="https://go.dev/cl/425184">https://go.dev/cl/425184</a>: reflect: fix Value.SetIterXXX to check for the read-only bit
-    </p>
-
-    <p><!-- CL 428757 -->
-      TODO: <a href="https://go.dev/cl/428757">https://go.dev/cl/428757</a>: reflect: deprecate SliceHeader and StringHeader
+      Go 1.18 introduced <a href="/pkg/reflect/#Value.SetIterKey"><code>Value.SetIterKey</code></a>
+      and <a href="/pkg/reflect/#Value.SetIterValue"><code>Value.SetIterValue</code></a> methods.
+      These are optimizations: <code>v.SetIterKey(it)</code> is meant to be equivalent to <code>v.Set(it.Key())</code>.
+      The implementations incorrectly omitted a check for use of unexported fields that was present in the unoptimized forms.
+      Go 1.20 corrects these methods to include the unexported field check.
     </p>
   </dd>
 </dl><!-- reflect -->
@@ -839,7 +848,12 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="regexp"><dt><a href="/pkg/regexp/">regexp</a></dt>
   <dd>
     <p><!-- CL 444817 -->
-      TODO: <a href="https://go.dev/cl/444817">https://go.dev/cl/444817</a>: regexp: add ErrLarge error; modified api/next/56041.txt
+      Go 1.19.2 and Go 1.18.7 included a security fix to the regular expression parser,
+      making it reject very large expressions that would consume too much memory.
+      Because Go patch releases do not introduce new API,
+      the parser returned <a href="/pkg/regexp/syntax/#ErrInternalError"><code>syntax.ErrInternalError</code></a> in this case.
+      Go 1.20 adds a more specific error, <a href="/pkg/regexp/syntax/#ErrLarge"><code>syntax.ErrLarge</code></a>,
+      which the parser now returns instead.
     </p>
   </dd>
 </dl><!-- regexp -->
@@ -852,22 +866,20 @@ proxyHandler := &httputil.ReverseProxy{
   </dd>
 </dl><!-- runtime/metrics -->
 
-<dl id="strconv"><dt><a href="/pkg/strconv/">strconv</a></dt>
-  <dd>
-    <p><!-- CL 345488 -->
-      TODO: <a href="https://go.dev/cl/345488">https://go.dev/cl/345488</a>: strconv: optimize Parse for []byte arguments
-    </p>
-  </dd>
-</dl><!-- strconv -->
-
 <dl id="strings"><dt><a href="/pkg/strings/">strings</a></dt>
   <dd>
-    <p><!-- https://go.dev/issue/42537 -->
-      TODO: <a href="https://go.dev/issue/42537">https://go.dev/issue/42537</a>: add CutPrefix and CutSuffix
+    <p><!-- CL 407176 -->
+      The new
+      <a href="/pkg/bytes/#CutPrefix"><code>CutPrefix</code></a> and
+      <a href="/pkg/bytes/#CutSuffix"><code>CutSuffix</code></a> functions
+      are like <a href="/pkg/bytes/#TrimPrefix"><code>TrimPrefix</code></a>
+      and <a href="/pkg/bytes/#TrimSuffix"><code>TrimSuffix</code></a>
+      but also report whether the string was trimmed.
     </p>
 
-    <p><!-- https://go.dev/issue/45038 -->
-      TODO: <a href="https://go.dev/issue/45038">https://go.dev/issue/45038</a>: bytes, strings: add Clone
+    <p><!-- CL 359675 -->
+      The new <a href="/pkg/strings/#Clone"><code>Clone</code></a> function
+      allocates a copy of a string.
     </p>
   </dd>
 </dl><!-- strings -->
@@ -875,9 +887,9 @@ proxyHandler := &httputil.ReverseProxy{
 <dl id="sync"><dt><a href="/pkg/sync/">sync</a></dt>
   <dd>
     <p><!-- CL 399094, https://go.dev/issue/51972 -->
-      The new methods <a href="/pkg/sync/#Map.Swap"><code>Map.Swap</code></a>,
-      <a href="/pkg/sync/#Map.CompareAndSwap"><code>Map.CompareAndSwap</code></a>, and
-      <a href="/pkg/sync/#Map.CompareAndDelete"><code>Map.CompareAndDelete</code></a>
+      The new <a href="/pkg/sync/#Map"><code>Map</code></a> methods <a href="/pkg/sync/#Map.Swap"><code>Swap</code></a>,
+      <a href="/pkg/sync/#Map.CompareAndSwap"><code>CompareAndSwap</code></a>, and
+      <a href="/pkg/sync/#Map.CompareAndDelete"><code>CompareAndDelete</code></a>
       allow existing map entries to be updated atomically.
     </p>
   </dd>
@@ -911,36 +923,38 @@ proxyHandler := &httputil.ReverseProxy{
 
 <dl id="time"><dt><a href="/pkg/time/">time</a></dt>
   <dd>
-    <p><!-- https://go.dev/issue/52746 -->
-      TODO: <a href="https://go.dev/issue/52746">https://go.dev/issue/52746</a>: add DateTime, DateOnly, TimeOnly format constants
-    </p>
-
-    <p><!-- CL 412495 -->
-      TODO: <a href="https://go.dev/cl/412495">https://go.dev/cl/412495</a>: time: add DateTime, DateOnly, and TimeOnly
+    <p><!-- https://go.dev/issue/52746 --><!-- CL 412495 -->
+      The new time layout constants <a href="/pkg/time/#DateTime"><code>DateTime</code></a>,
+      <a href="/pkg/time/#DateOnly"><code>DateOnly</code></a>, and
+      <a href="/pkg/time/#TimeOnly"><code>TimeOnly</code></a>
+      provide names for three of the most common layout strings used in a survey of public Go source code.
     </p>
 
     <p><!-- CL 382734 --><!-- https://go.dev/issue/50770 -->
-      TODO: <a href="https://go.dev/cl/382734">https://go.dev/cl/382734</a>: time: implement Compare method
+      The new <a href="/pkg/time/#Time.Compare"><code>Time.Compare</code></a> method
+      compares two times.
     </p>
 
     <p><!-- CL 425037 -->
-      TODO: <a href="https://go.dev/cl/425037">https://go.dev/cl/425037</a>: time: fix Parse to ignore extra sub-nanosecond digits
+      <a href="/pkg/time/#Parse"><code>Parse</code></a>
+      now ignores sub-nanosecond precision in its input,
+      instead of reporting those digits as an error.
     </p>
 
     <p><!-- CL 444277 -->
-      TODO: <a href="https://go.dev/cl/444277">https://go.dev/cl/444277</a>: time: implement strict RFC 3339 during marshal and unmarshal
+      The <a href="/pkg/time/#Time.MarshalJSON"><code>Time.MarshalJSON</code></a> and
+      <a href="/pkg/time/#Time.UnmarshalJSON"><code>Time.UnmarshalJSON</code></a> methods
+      are now more strict about adherence to RFC 3339.
     </p>
   </dd>
 </dl><!-- time -->
 
 <dl id="unicode/utf16"><dt><a href="/pkg/unicode/utf16/">unicode/utf16</a></dt>
   <dd>
-    <p><!-- https://go.dev/issue/51896 -->
-      TODO: <a href="https://go.dev/issue/51896">https://go.dev/issue/51896</a>: add AppendRune
-    </p>
-
-    <p><!-- CL 409054 -->
-      TODO: <a href="https://go.dev/cl/409054">https://go.dev/cl/409054</a>: unicode/utf16: add AppendRune; modified api/next/51896.txt
+    <p><!-- https://go.dev/issue/51896 --><!-- CL 409054 -->
+      The new  <a href="/pkg/unicode/utf16/#AppendRune"><code>AppendRune</code></a>
+      function appends the UTF-16 encoding of a given rune to a uint16 slice,
+      analogous to <a href="/pkg/unicode/utf8/#AppendRune"><code>utf8.AppendRune</code></a>.
     </p>
   </dd>
 </dl><!-- unicode/utf16 -->
@@ -960,3 +974,5 @@ proxyHandler := &httputil.ReverseProxy{
 <!-- https://go.dev/issue/50035 https://go.dev/issue/54237 x/time/rate -->
 <!-- CL 421879: cmd/cgo: add and use runtime/cgo.Incomplete instead of //go:notinheap -->
 <!-- https://go.dev/issue/46731: replace `//go:notinheap` with runtime/internal/sys.NotInHeap -->
+<!-- CL 345488 strconv optimization -->
+<!-- CL 428757 reflect deprecation, rolled back -->
