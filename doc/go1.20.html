@@ -67,6 +67,13 @@ Do not send CLs removing the interior tags from such phrases.
 
 <h2 id="ports">Ports</h2>
 
+<h3 id="darwin">Darwin and iOS</h3>
+
+<p><!-- golang.org/issue/23011 -->
+  Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave.
+  Go 1.21 will require macOS 10.15 Catalina or later.
+</p>
+
 <h3 id="freebsd-riscv">FreeBSD/RISC-V</h3>
 
 <p><!-- https://go.dev/issue/53466 -->
@@ -638,7 +645,8 @@ proxyHandler := &httputil.ReverseProxy{
       The new <a href="/pkg/crypto/x509/#SetFallbackRoots"><code>SetFallbackRoots</code></a>
       function allows a program to define a set of fallback root certificates in case the
       operating system verifier or standard platform root bundle is unavailable at runtime.
-      It will most commonly be used with the new TODO LINK TO x/crypto PACKAGE ONCE IT EXISTS.
+      It will most commonly be used with a new package, <a href="/pkg/golang.org/x/crypto/x509roots/fallback">golang.org/x/crypto/x509roots/fallback</a>,
+      which will provide an up to date root bundle.
     </p>
   </dd>
 </dl><!-- crypto/x509 -->
