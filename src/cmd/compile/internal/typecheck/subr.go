@@ -382,7 +382,7 @@ func Assignop1(src, dst *types.Type) (ir.Op, string) {
 			// don't have the methods for them.
 			return ir.OCONVIFACE, ""
 		}
-		if base.Debug.Unified != 0 && src.HasShape() {
+		if src.HasShape() {
 			// Unified IR uses OCONVIFACE for converting all derived types
 			// to interface type, not just type arguments themselves.
 			return ir.OCONVIFACE, ""
@@ -397,7 +397,8 @@ func Assignop1(src, dst *types.Type) (ir.Op, string) {
 		} else if have != nil && have.Sym == missing.Sym && have.Nointerface() {
 			why = fmt.Sprintf(":\n\t%v does not implement %v (%v method is marked 'nointerface')", src, dst, missing.Sym)
 		} else if have != nil && have.Sym == missing.Sym {
-			why = fmt.Sprintf(":\n\t%v does not implement %v %s", src, dst, wrongTypeFor(have.Sym, have.Type, missing.Sym, missing.Type))
+			why = fmt.Sprintf(":\n\t%v does not implement %v (wrong type for %v method)\n"+
+				"\t\thave %v%S\n\t\twant %v%S", src, dst, missing.Sym, have.Sym, have.Type, missing.Sym, missing.Type)
 		} else if ptr != 0 {
 			why = fmt.Sprintf(":\n\t%v does not implement %v (%v method has pointer receiver)", src, dst, missing.Sym)
 		} else if have != nil {

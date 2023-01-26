@@ -645,15 +645,13 @@ func (v *hairyVisitor) doNode(n ir.Node) bool {
 		// minimize impact to the existing inlining heuristics (in
 		// particular, to avoid breaking the existing inlinability regress
 		// tests), we need to compensate for this here.
-		if base.Debug.Unified != 0 {
-			if init := n.Rhs[0].Init(); len(init) == 1 {
-				if _, ok := init[0].(*ir.AssignListStmt); ok {
-					// 4 for each value, because each temporary variable now
-					// appears 3 times (DCL, LHS, RHS), plus an extra DCL node.
-					//
-					// 1 for the extra "tmp1, tmp2 = f()" assignment statement.
-					v.budget += 4*int32(len(n.Lhs)) + 1
-				}
+		if init := n.Rhs[0].Init(); len(init) == 1 {
+			if _, ok := init[0].(*ir.AssignListStmt); ok {
+				// 4 for each value, because each temporary variable now
+				// appears 3 times (DCL, LHS, RHS), plus an extra DCL node.
+				//
+				// 1 for the extra "tmp1, tmp2 = f()" assignment statement.
+				v.budget += 4*int32(len(n.Lhs)) + 1
 			}
 		}
 
@@ -906,7 +904,10 @@ var SSADumpInline = func(*ir.Func) {}
 
 // InlineCall allows the inliner implementation to be overridden.
 // If it returns nil, the function will not be inlined.
-var InlineCall = oldInlineCall
+var InlineCall = func(call *ir.CallExpr, fn *ir.Func, inlIndex int) *ir.InlinedCallExpr {
+	base.Fatalf("inline.InlineCall not overridden")
+	panic("unreachable")
+}
 
 // If n is a OCALLFUNC node, and fn is an ONAME node for a
 // function with an inlinable body, return an OINLCALL node that can replace n.
@@ -956,49 +957,6 @@ func mkinlcall(n *ir.CallExpr, fn *ir.Func, maxCost int32, inlCalls *[]*ir.Inlin
 			logopt.LogOpt(n.Pos(), "cannotInlineCall", "inline", fmt.Sprintf("recursive call to %s", ir.FuncName(ir.CurFunc)))
 		}
 		return n
-	}
-
-	// The non-unified frontend has issues with inlining and shape parameters.
-	if base.Debug.Unified == 0 {
-		// Don't inline a function fn that has no shape parameters, but is passed at
-		// least one shape arg. This means we must be inlining a non-generic function
-		// fn that was passed into a generic function, and can be called with a shape
-		// arg because it matches an appropriate type parameters. But fn may include
-		// an interface conversion (that may be applied to a shape arg) that was not
-		// apparent when we first created the instantiation of the generic function.
-		// We can't handle this if we actually do the inlining, since we want to know
-		// all interface conversions immediately after stenciling. So, we avoid
-		// inlining in this case, see issue #49309. (1)
-		//
-		// See discussion on go.dev/cl/406475 for more background.
-		if !fn.Type().Params().HasShape() {
-			for _, arg := range n.Args {
-				if arg.Type().HasShape() {
-					if logopt.Enabled() {
-						logopt.LogOpt(n.Pos(), "cannotInlineCall", "inline", ir.FuncName(ir.CurFunc),
-							fmt.Sprintf("inlining function %v has no-shape params with shape args", ir.FuncName(fn)))
-					}
-					return n
-				}
-			}
-		} else {
-			// Don't inline a function fn that has shape parameters, but is passed no shape arg.
-			// See comments (1) above, and issue #51909.
-			inlineable := len(n.Args) == 0 // Function has shape in type, with no arguments can always be inlined.
-			for _, arg := range n.Args {
-				if arg.Type().HasShape() {
-					inlineable = true
-					break
-				}
-			}
-			if !inlineable {
-				if logopt.Enabled() {
-					logopt.LogOpt(n.Pos(), "cannotInlineCall", "inline", ir.FuncName(ir.CurFunc),
-						fmt.Sprintf("inlining function %v has shape params with no-shape args", ir.FuncName(fn)))
-				}
-				return n
-			}
-		}
 	}
 
 	if base.Flag.Cfg.Instrumenting && types.IsRuntimePkg(fn.Sym().Pkg) {
@@ -1141,10 +1099,6 @@ func CalleeEffects(init *ir.Nodes, callee ir.Node) {
 // the inlining tree position index, for use with src.NewInliningBase
 // when rewriting positions.
 func oldInlineCall(call *ir.CallExpr, fn *ir.Func, inlIndex int) *ir.InlinedCallExpr {
-	if base.Debug.TypecheckInl == 0 {
-		typecheck.ImportedBody(fn)
-	}
-
 	SSADumpInline(fn)
 
 	ninit := call.Init()
