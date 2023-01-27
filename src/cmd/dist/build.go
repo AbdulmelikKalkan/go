@@ -46,6 +46,7 @@ var (
 	tooldir          string
 	oldgoos          string
 	oldgoarch        string
+	oldgocache       string
 	exe              string
 	defaultcc        map[string]string
 	defaultcxx       map[string]string
@@ -233,11 +234,6 @@ func xinit() {
 	os.Setenv("GOPPC64", goppc64)
 	os.Setenv("GOROOT", goroot)
 	os.Setenv("GOROOT_FINAL", goroot_final)
-
-	// Use a build cache separate from the default user one.
-	// Also one that will be wiped out during startup, so that
-	// make.bash really does start from a clean slate.
-	os.Setenv("GOCACHE", pathf("%s/pkg/obj/go-build", goroot))
 
 	// Set GOBIN to GOROOT/bin. The meaning of GOBIN has drifted over time
 	// (see https://go.dev/issue/3269, https://go.dev/cl/183058,
@@ -1211,7 +1207,6 @@ func cmdenv() {
 	xprintf(format, "GO111MODULE", "")
 	xprintf(format, "GOARCH", goarch)
 	xprintf(format, "GOBIN", gorootBin)
-	xprintf(format, "GOCACHE", os.Getenv("GOCACHE"))
 	xprintf(format, "GODEBUG", os.Getenv("GODEBUG"))
 	xprintf(format, "GOENV", "off")
 	xprintf(format, "GOFLAGS", "")
@@ -1340,6 +1335,12 @@ func cmdbootstrap() {
 	// go tool may complain.
 	os.Setenv("GOPATH", pathf("%s/pkg/obj/gopath", goroot))
 
+	// Use a build cache separate from the default user one.
+	// Also one that will be wiped out during startup, so that
+	// make.bash really does start from a clean slate.
+	oldgocache = os.Getenv("GOCACHE")
+	os.Setenv("GOCACHE", pathf("%s/pkg/obj/go-build", goroot))
+
 	// Disable GOEXPERIMENT when building toolchain1 and
 	// go_bootstrap. We don't need any experiments for the
 	// bootstrap toolchain, and this lets us avoid duplicating the
@@ -1405,7 +1406,6 @@ func cmdbootstrap() {
 	setNoOpt()
 	goldflags = os.Getenv("GO_LDFLAGS") // we were using $BOOT_GO_LDFLAGS until now
 	goBootstrap := pathf("%s/go_bootstrap", tooldir)
-	cmdGo := pathf("%s/go", gorootBin)
 	if debug {
 		run("", ShowOutput|CheckExit, pathf("%s/compile", tooldir), "-V=full")
 		copyfile(pathf("%s/compile1", tooldir), pathf("%s/compile", tooldir), writeExec)
@@ -1468,6 +1468,13 @@ func cmdbootstrap() {
 		copyfile(pathf("%s/compile3", tooldir), pathf("%s/compile", tooldir), writeExec)
 	}
 
+	// Now that toolchain3 has been built from scratch, its compiler and linker
+	// should have accurate build IDs suitable for caching.
+	// Now prime the build cache with the rest of the standard library for
+	// testing, and so that the user can run 'go install std cmd' to quickly
+	// iterate on local changes without waiting for a full rebuild.
+	os.Setenv("GOCACHE", oldgocache)
+
 	if goos == oldgoos && goarch == oldgoarch {
 		// Common case - not setting up for cross-compilation.
 		timelog("build", "toolchain")
@@ -1488,8 +1495,8 @@ func cmdbootstrap() {
 		goInstall(toolenv, goBootstrap, "cmd")
 		checkNotStale(nil, goBootstrap, "std")
 		checkNotStale(toolenv, goBootstrap, "cmd")
-		checkNotStale(nil, cmdGo, "std")
-		checkNotStale(toolenv, cmdGo, "cmd")
+		checkNotStale(nil, gorootBinGo, "std")
+		checkNotStale(toolenv, gorootBinGo, "cmd")
 
 		timelog("build", "target toolchain")
 		if vflag > 0 {
@@ -1507,8 +1514,8 @@ func cmdbootstrap() {
 	checkNotStale(toolenv, goBootstrap, append(toolchain, "runtime/internal/sys")...)
 	checkNotStale(nil, goBootstrap, "std")
 	checkNotStale(toolenv, goBootstrap, "cmd")
-	checkNotStale(nil, cmdGo, "std")
-	checkNotStale(toolenv, cmdGo, "cmd")
+	checkNotStale(nil, gorootBinGo, "std")
+	checkNotStale(toolenv, gorootBinGo, "cmd")
 	if debug {
 		run("", ShowOutput|CheckExit, pathf("%s/compile", tooldir), "-V=full")
 		checkNotStale(toolenv, goBootstrap, append(toolchain, "runtime/internal/sys")...)
@@ -1542,7 +1549,7 @@ func cmdbootstrap() {
 		os.Setenv("GOOS", gohostos)
 		os.Setenv("GOARCH", gohostarch)
 		os.Setenv("CC", compilerEnvLookup("CC", defaultcc, gohostos, gohostarch))
-		goCmd(nil, cmdGo, "build", "-o", pathf("%s/go_%s_%s_exec%s", gorootBin, goos, goarch, exe), wrapperPath)
+		goCmd(nil, gorootBinGo, "build", "-o", pathf("%s/go_%s_%s_exec%s", gorootBin, goos, goarch, exe), wrapperPath)
 		// Restore environment.
 		// TODO(elias.naur): support environment variables in goCmd?
 		os.Setenv("GOOS", goos)

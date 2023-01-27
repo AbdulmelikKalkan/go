@@ -1,33 +1,23 @@
-// Copyright 2021 The Go Authors. All rights reserved.
+// Copyright 2023 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package unix
 
 import (
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
 )
 
-//go:cgo_import_dynamic libc_getrandom getrandom "libc.so"
-
-//go:linkname procGetrandom libc_getrandom
-
-var procGetrandom uintptr
+// NetBSD getrandom system call number.
+const getrandomTrap uintptr = 91
 
 var getrandomUnsupported atomic.Bool
 
 // GetRandomFlag is a flag supported by the getrandom system call.
 type GetRandomFlag uintptr
-
-const (
-	// GRND_NONBLOCK means return EAGAIN rather than blocking.
-	GRND_NONBLOCK GetRandomFlag = 0x0001
-
-	// GRND_RANDOM means use the /dev/random pool instead of /dev/urandom.
-	GRND_RANDOM GetRandomFlag = 0x0002
-)
 
 // GetRandom calls the getrandom system call.
 func GetRandom(p []byte, flags GetRandomFlag) (n int, err error) {
@@ -37,12 +27,15 @@ func GetRandom(p []byte, flags GetRandomFlag) (n int, err error) {
 	if getrandomUnsupported.Load() {
 		return 0, syscall.ENOSYS
 	}
-	r1, _, errno := syscall6(uintptr(unsafe.Pointer(&procGetrandom)),
-		3,
+	// getrandom(2) was added in NetBSD 10.0
+	if getOSRevision() < 1000000000 {
+		getrandomUnsupported.Store(true)
+		return 0, syscall.ENOSYS
+	}
+	r1, _, errno := syscall.Syscall(getrandomTrap,
 		uintptr(unsafe.Pointer(&p[0])),
 		uintptr(len(p)),
-		uintptr(flags),
-		0, 0, 0)
+		uintptr(flags))
 	if errno != 0 {
 		if errno == syscall.ENOSYS {
 			getrandomUnsupported.Store(true)
@@ -50,4 +43,14 @@ func GetRandom(p []byte, flags GetRandomFlag) (n int, err error) {
 		return 0, errno
 	}
 	return int(r1), nil
+}
+
+var (
+	osrevisionOnce sync.Once
+	osrevision     uint32
+)
+
+func getOSRevision() uint32 {
+	osrevisionOnce.Do(func() { osrevision, _ = syscall.SysctlUint32("kern.osrevision") })
+	return osrevision
 }
