@@ -1287,14 +1287,12 @@ func cmdbootstrap() {
 	timelog("start", "dist bootstrap")
 	defer timelog("end", "dist bootstrap")
 
-	var noBanner, noClean bool
-	var debug bool
-	var force bool
+	var debug, force, noBanner, noClean bool
 	flag.BoolVar(&rebuildall, "a", rebuildall, "rebuild all")
 	flag.BoolVar(&debug, "d", debug, "enable debugging of bootstrap process")
+	flag.BoolVar(&force, "force", force, "build even if the port is marked as broken")
 	flag.BoolVar(&noBanner, "no-banner", noBanner, "do not print banner")
 	flag.BoolVar(&noClean, "no-clean", noClean, "print deprecation warning")
-	flag.BoolVar(&force, "force", force, "build even if the port is marked as broken")
 
 	xflagparse(0)
 
@@ -1470,12 +1468,9 @@ func cmdbootstrap() {
 		if vflag > 0 {
 			xprintf("\n")
 		}
-		xprintf("Building packages and commands for host, %s/%s.\n", goos, goarch)
-		goInstall(nil, goBootstrap, "std")
+		xprintf("Building commands for host, %s/%s.\n", goos, goarch)
 		goInstall(toolenv, goBootstrap, "cmd")
-		checkNotStale(nil, goBootstrap, "std")
 		checkNotStale(toolenv, goBootstrap, "cmd")
-		checkNotStale(nil, gorootBinGo, "std")
 		checkNotStale(toolenv, gorootBinGo, "cmd")
 
 		timelog("build", "target toolchain")
