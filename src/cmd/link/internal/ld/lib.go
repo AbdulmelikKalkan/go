@@ -200,7 +200,7 @@ type Arch struct {
 	// is the contents of the to-be-relocated data item (from sym.P). Return
 	// value is the appropriately relocated value (to be written back to the
 	// same spot in sym.P), number of external _host_ relocations needed (i.e.
-	// ELF/Mach-O/etc. relocations, not Go relocations, this must match Elfreloc1,
+	// ELF/Mach-O/etc. relocations, not Go relocations, this must match ELF.Reloc1,
 	// etc.), and a boolean indicating success/failure (a failing value indicates
 	// a fatal error).
 	Archreloc func(*Target, *loader.Loader, *ArchSyms, loader.Reloc, loader.Sym,
@@ -630,6 +630,25 @@ func (ctxt *Link) loadlib() {
 			}
 			if *flagLibGCC != "none" {
 				hostArchive(ctxt, *flagLibGCC)
+				// For glibc systems, the linker setup used by GCC
+				// looks like
+				//
+				//  GROUP ( /lib/x86_64-linux-gnu/libc.so.6
+				//      /usr/lib/x86_64-linux-gnu/libc_nonshared.a
+				//      AS_NEEDED ( /lib64/ld-linux-x86-64.so.2 ) )
+				//
+				// where libc_nonshared.a contains a small set of
+				// symbols including "__stack_chk_fail_local" and a
+				// few others. Thus if we are doing internal linking
+				// and "__stack_chk_fail_local" is unresolved (most
+				// likely due to the use of -fstack-protector), try
+				// loading libc_nonshared.a to resolve it.
+				isunresolved := symbolsAreUnresolved(ctxt, []string{"__stack_chk_fail_local"})
+				if isunresolved[0] {
+					if p := ctxt.findLibPath("libc_nonshared.a"); p != "none" {
+						hostArchive(ctxt, p)
+					}
+				}
 			}
 		}
 	}
@@ -1203,13 +1222,16 @@ func hostlinksetup(ctxt *Link) {
 
 // hostobjCopy creates a copy of the object files in hostobj in a
 // temporary directory.
-func hostobjCopy() (paths []string) {
+func (ctxt *Link) hostobjCopy() (paths []string) {
 	var wg sync.WaitGroup
 	sema := make(chan struct{}, runtime.NumCPU()) // limit open file descriptors
 	for i, h := range hostobj {
 		h := h
 		dst := filepath.Join(*flagTmpdir, fmt.Sprintf("%06d.o", i))
 		paths = append(paths, dst)
+		if ctxt.Debugvlog != 0 {
+			ctxt.Logf("host obj copy: %s from pkg %s -> %s\n", h.pn, h.pkg, dst)
+		}
 
 		wg.Add(1)
 		go func() {
@@ -1292,7 +1314,7 @@ func (ctxt *Link) archive() {
 	}
 	argv = append(argv, *flagOutfile)
 	argv = append(argv, filepath.Join(*flagTmpdir, "go.o"))
-	argv = append(argv, hostobjCopy()...)
+	argv = append(argv, ctxt.hostobjCopy()...)
 
 	if ctxt.Debugvlog != 0 {
 		ctxt.Logf("archive: %s\n", strings.Join(argv, " "))
@@ -1631,7 +1653,7 @@ func (ctxt *Link) hostlink() {
 	}
 
 	argv = append(argv, filepath.Join(*flagTmpdir, "go.o"))
-	argv = append(argv, hostobjCopy()...)
+	argv = append(argv, ctxt.hostobjCopy()...)
 	if ctxt.HeadType == objabi.Haix {
 		// We want to have C files after Go files to remove
 		// trampolines csects made by ld.

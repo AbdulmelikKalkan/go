@@ -149,7 +149,7 @@ func (t *tester) run() {
 	if t.rebuild {
 		t.out("Building packages and commands.")
 		// Force rebuild the whole toolchain.
-		goInstall(toolenv, gorootBinGo, append([]string{"-a"}, toolchain...)...)
+		goInstall(toolenv(), gorootBinGo, append([]string{"-a"}, toolchain...)...)
 	}
 
 	if !t.listMode {
@@ -166,9 +166,9 @@ func (t *tester) run() {
 			// and virtualization we usually start with a clean GOCACHE, so we would
 			// end up rebuilding large parts of the standard library that aren't
 			// otherwise relevant to the actual set of packages under test.
-			goInstall(toolenv, gorootBinGo, toolchain...)
-			goInstall(toolenv, gorootBinGo, toolchain...)
-			goInstall(toolenv, gorootBinGo, "cmd")
+			goInstall(toolenv(), gorootBinGo, toolchain...)
+			goInstall(toolenv(), gorootBinGo, toolchain...)
+			goInstall(toolenv(), gorootBinGo, "cmd")
 		}
 	}
 
@@ -1086,21 +1086,14 @@ func (t *tester) out(v string) {
 	fmt.Println("\n" + t.banner + v)
 }
 
+// extLink reports whether the current goos/goarch supports
+// external linking. This should match the test in determineLinkMode
+// in cmd/link/internal/ld/config.go.
 func (t *tester) extLink() bool {
-	pair := gohostos + "-" + goarch
-	switch pair {
-	case "aix-ppc64",
-		"android-arm", "android-arm64",
-		"darwin-amd64", "darwin-arm64",
-		"dragonfly-amd64",
-		"freebsd-386", "freebsd-amd64", "freebsd-arm", "freebsd-riscv64",
-		"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "linux-loong64", "linux-ppc64le", "linux-mips64", "linux-mips64le", "linux-mips", "linux-mipsle", "linux-riscv64", "linux-s390x",
-		"netbsd-386", "netbsd-amd64",
-		"openbsd-386", "openbsd-amd64",
-		"windows-386", "windows-amd64":
-		return true
+	if goarch == "ppc64" && goos != "aix" {
+		return false
 	}
-	return false
+	return true
 }
 
 func (t *tester) internalLink() bool {
@@ -1141,6 +1134,7 @@ func (t *tester) internalLinkPIE() bool {
 	return false
 }
 
+// supportedBuildMode reports whether the given build mode is supported.
 func (t *tester) supportedBuildmode(mode string) bool {
 	pair := goos + "-" + goarch
 	switch mode {
@@ -1148,13 +1142,24 @@ func (t *tester) supportedBuildmode(mode string) bool {
 		if !t.extLink() {
 			return false
 		}
-		switch pair {
-		case "aix-ppc64",
-			"darwin-amd64", "darwin-arm64", "ios-arm64",
-			"linux-amd64", "linux-386", "linux-ppc64le", "linux-riscv64", "linux-s390x",
-			"freebsd-amd64",
-			"windows-amd64", "windows-386":
+		switch goos {
+		case "aix", "darwin", "ios", "windows":
 			return true
+		case "linux":
+			switch goarch {
+			case "386", "amd64", "arm", "armbe", "arm64", "arm64be", "ppc64", "ppc64le", "riscv64", "s390x":
+				return true
+			default:
+				// Other targets do not support -shared,
+				// per ParseFlags in
+				// cmd/compile/internal/base/flag.go.
+				// For c-archive the Go tool passes -shared,
+				// so that the result is suitable for inclusion
+				// in a PIE or shared library.
+				return false
+			}
+		case "freebsd":
+			return goarch == "amd64"
 		}
 		return false
 	case "c-shared":
@@ -1162,7 +1167,7 @@ func (t *tester) supportedBuildmode(mode string) bool {
 		case "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "linux-ppc64le", "linux-riscv64", "linux-s390x",
 			"darwin-amd64", "darwin-arm64",
 			"freebsd-amd64",
-			"android-arm", "android-arm64", "android-386",
+			"android-arm", "android-arm64", "android-386", "android-amd64",
 			"windows-amd64", "windows-386", "windows-arm64":
 			return true
 		}
@@ -1177,6 +1182,8 @@ func (t *tester) supportedBuildmode(mode string) bool {
 		switch pair {
 		case "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "linux-s390x", "linux-ppc64le":
 			return true
+		case "android-386", "android-amd64", "android-arm", "android-arm64":
+			return true
 		case "darwin-amd64", "darwin-arm64":
 			return true
 		case "freebsd-amd64":
@@ -1185,13 +1192,15 @@ func (t *tester) supportedBuildmode(mode string) bool {
 		return false
 	case "pie":
 		switch pair {
-		case "aix/ppc64",
+		case "aix-ppc64",
 			"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "linux-ppc64le", "linux-riscv64", "linux-s390x",
 			"android-amd64", "android-arm", "android-arm64", "android-386":
 			return true
-		case "darwin-amd64", "darwin-arm64":
+		case "darwin-amd64", "darwin-arm64", "ios-amd64", "ios-arm64":
 			return true
-		case "windows-amd64", "windows-386", "windows-arm":
+		case "windows-amd64", "windows-386", "windows-arm", "windows-arm64":
+			return true
+		case "freebsd-amd64":
 			return true
 		}
 		return false
