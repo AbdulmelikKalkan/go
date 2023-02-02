@@ -137,14 +137,7 @@ func (check *Checker) infer(posn positioner, tparams []*TypeParam, targs []Type,
 	// Unify parameter and argument types for generic parameters with typed arguments
 	// and collect the indices of generic parameters with untyped arguments.
 	// Terminology: generic parameter = function parameter with a type-parameterized type
-	u := newUnifier(tparams)
-
-	// Set the type arguments which we know already.
-	for i, targ := range targs {
-		if targ != nil {
-			u.set(i, targ)
-		}
-	}
+	u := newUnifier(tparams, targs)
 
 	errorf := func(kind string, tpar, targ Type, arg *operand) {
 		// provide a better error message if we can
@@ -464,14 +457,7 @@ func (check *Checker) inferB(tparams []*TypeParam, targs []Type) (types []Type, 
 	}
 
 	// Unify type parameters with their constraints.
-	u := newUnifier(tparams)
-
-	// Set the type arguments which we know already.
-	for i, targ := range targs {
-		if targ != nil {
-			u.set(i, targ)
-		}
-	}
+	u := newUnifier(tparams, targs)
 
 	// Repeatedly apply constraint type inference as long as
 	// there are still unknown type arguments and progress is
@@ -491,7 +477,7 @@ func (check *Checker) inferB(tparams []*TypeParam, targs []Type) (types []Type, 
 	for n := u.unknowns(); n > 0; {
 		nn := n
 
-		for i, tpar := range tparams {
+		for _, tpar := range tparams {
 			// If there is a core term (i.e., a core type with tilde information)
 			// unify the type parameter with the core type.
 			if core, single := coreTerm(tpar); core != nil {
@@ -499,7 +485,7 @@ func (check *Checker) inferB(tparams []*TypeParam, targs []Type) (types []Type, 
 					u.tracef("core(%s) = %s (single = %v)", tpar, core, single)
 				}
 				// A type parameter can be unified with its core type in two cases.
-				tx := u.at(i)
+				tx := u.at(tpar)
 				switch {
 				case tx != nil:
 					// The corresponding type argument tx is known.
@@ -521,7 +507,7 @@ func (check *Checker) inferB(tparams []*TypeParam, targs []Type) (types []Type, 
 					// For instance, given [P T1|T2, ...] where the type argument for P is (named
 					// type) T1, and T1 and T2 have the same built-in (named) type T0 as underlying
 					// type, the core type will be the named type T0, which doesn't match T1.
-					// Yet the instantiation of P with T1 is clearly valid (see #53650).
+					// Yet the instantiation of P with T1 is clearly valid (see go.dev/issue/53650).
 					// Reporting an error if unification fails would be incorrect in this case.
 					// On the other hand, it is safe to ignore failing unification during constraint
 					// type inference because if the failure is true, an error will be reported when
@@ -532,7 +518,7 @@ func (check *Checker) inferB(tparams []*TypeParam, targs []Type) (types []Type, 
 					// The corresponding type argument tx is unknown and there's a single
 					// specific type and no tilde.
 					// In this case the type argument must be that single type; set it.
-					u.set(i, core.typ)
+					u.set(tpar, core.typ)
 
 				default:
 					// Unification is not possible and no progress was made.
