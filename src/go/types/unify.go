@@ -36,11 +36,6 @@ const (
 	//   x ≢ y    types x and y cannot be unified
 	//   [p, q, ...] ➞ [x, y, ...]    mapping from type parameters to types
 	traceInference = false
-
-	// If exactUnification is set, unification requires (named) types
-	// to match exactly. If it is not set, the underlying types are
-	// considered when unification is known to fail otherwise.
-	exactUnification = false
 )
 
 // A unifier maintains a list of type parameters and
@@ -216,12 +211,19 @@ func (u *unifier) nifyEq(x, y Type, p *ifacePair) bool {
 // code the corresponding changes should be made here.
 // Must not be called directly from outside the unifier.
 func (u *unifier) nify(x, y Type, p *ifacePair) (result bool) {
+	u.depth++
 	if traceInference {
 		u.tracef("%s ≡ %s", x, y)
 	}
+	defer func() {
+		if traceInference && !result {
+			u.tracef("%s ≢ %s", x, y)
+		}
+		u.depth--
+	}()
 
 	// Stop gap for cases where unification fails.
-	if u.depth >= unificationDepthLimit {
+	if u.depth > unificationDepthLimit {
 		if traceInference {
 			u.tracef("depth %d >= %d", u.depth, unificationDepthLimit)
 		}
@@ -230,34 +232,36 @@ func (u *unifier) nify(x, y Type, p *ifacePair) (result bool) {
 		}
 		return false
 	}
-	u.depth++
-	defer func() {
-		u.depth--
-		if traceInference && !result {
-			u.tracef("%s ≢ %s", x, y)
-		}
-	}()
 
-	if !exactUnification {
-		// If exact unification is known to fail because we attempt to
-		// match a type name against an unnamed type literal, consider
-		// the underlying type of the named type.
-		// (We use !hasName to exclude any type with a name, including
-		// basic types and type parameters; the rest are unamed types.)
-		if nx, _ := x.(*Named); nx != nil && !hasName(y) {
-			if traceInference {
-				u.tracef("under %s ≡ %s", nx, y)
-			}
-			return u.nify(nx.under(), y, p)
-		} else if ny, _ := y.(*Named); ny != nil && !hasName(x) {
-			if traceInference {
-				u.tracef("%s ≡ under %s", x, ny)
-			}
-			return u.nify(x, ny.under(), p)
+	// Unification is symmetric, so we can swap the operands.
+	// Ensure that if we have at least one
+	// - defined type, make sure sure one is in y
+	// - type parameter recorded with u, make sure one is in x
+	if _, ok := x.(*Named); ok || u.asTypeParam(y) != nil {
+		if traceInference {
+			u.tracef("%s ≡ %s (swap)", y, x)
 		}
+		x, y = y, x
+	}
+
+	// If exact unification is known to fail because we attempt to
+	// match a defined type against an unnamed type literal, consider
+	// the underlying type of the defined type.
+	// If we have at least one defined type, there is one in y.
+	// (We use !hasName to exclude any type with a name, including
+	// basic types and type parameters; the rest are unamed types.)
+	if ny, _ := y.(*Named); ny != nil && !hasName(x) {
+		if traceInference {
+			u.tracef("%s ≡ under %s", x, ny)
+		}
+		y = ny.under()
+		// Per the spec, a defined type cannot have an underlying type
+		// that is a type parameter.
+		assert(!isTypeParam(y))
 	}
 
 	// Cases where at least one of x or y is a type parameter recorded with u.
+	// If we have ar least one type parameter, there is one in x.
 	switch px, py := u.asTypeParam(x), u.asTypeParam(y); {
 	case px != nil && py != nil:
 		// both x and y are type parameters
@@ -275,28 +279,27 @@ func (u *unifier) nify(x, y Type, p *ifacePair) (result bool) {
 		// otherwise, infer type from y
 		u.set(px, y)
 		return true
-
-	case py != nil:
-		// y is a type parameter, x is not
-		if ty := u.at(py); ty != nil {
-			return u.nifyEq(x, ty, p)
-		}
-		// otherwise, infer type from x
-		u.set(py, x)
-		return true
 	}
 
 	// If we get here and x or y is a type parameter, they are type parameters
 	// from outside our declaration list. Try to unify their core types, if any
 	// (see go.dev/issue/50755 for a test case).
-	if enableCoreTypeUnification && !exactUnification {
+	if enableCoreTypeUnification {
+		// swap x and y as needed
+		// (the earlier swap checks for _recorded_ type parameters only)
+		if isTypeParam(y) {
+			if traceInference {
+				u.tracef("%s ≡ %s (swap)", y, x)
+			}
+			x, y = y, x
+		}
 		if isTypeParam(x) && !hasName(y) {
 			// When considering the type parameter for unification
 			// we look at the adjusted core term (adjusted core type
 			// with tilde information).
 			// If the adjusted core type is a named type N; the
-			// corresponding core type is under(N). Since !exactUnification
-			// and y doesn't have a name, unification will end up
+			// corresponding core type is under(N).
+			// Since y doesn't have a name, unification will end up
 			// comparing under(N) to y, so we can just use the core
 			// type instead. And we can ignore the tilde because we
 			// already look at the underlying types on both sides
@@ -307,14 +310,6 @@ func (u *unifier) nify(x, y Type, p *ifacePair) (result bool) {
 					u.tracef("core %s ≡ %s", x, y)
 				}
 				return u.nify(cx, y, p)
-			}
-		} else if isTypeParam(y) && !hasName(x) {
-			// see comment above
-			if cy := coreType(y); cy != nil {
-				if traceInference {
-					u.tracef("%s ≡ core %s", x, y)
-				}
-				return u.nify(x, cy, p)
 			}
 		}
 	}
@@ -471,7 +466,7 @@ func (u *unifier) nify(x, y Type, p *ifacePair) (result bool) {
 	case *Chan:
 		// Two channel types are identical if they have identical value types.
 		if y, ok := y.(*Chan); ok {
-			return (!exactUnification || x.dir == y.dir) && u.nify(x.elem, y.elem, p)
+			return u.nify(x.elem, y.elem, p)
 		}
 
 	case *Named:
