@@ -16,6 +16,15 @@ var (
 )
 
 func (f *File) readFrom(r io.Reader) (written int64, handled bool, err error) {
+	// Neither copy_file_range(2) nor splice(2) supports destinations opened with
+	// O_APPEND, so don't bother to try zero-copy with these system calls.
+	//
+	// Visit https://man7.org/linux/man-pages/man2/copy_file_range.2.html#ERRORS and
+	// https://man7.org/linux/man-pages/man2/splice.2.html#ERRORS for details.
+	if f.appendMode {
+		return 0, false, nil
+	}
+
 	written, handled, err = f.copyFileRange(r)
 	if handled {
 		return
@@ -74,12 +83,6 @@ func getPollFD(r io.Reader) *poll.FD {
 }
 
 func (f *File) copyFileRange(r io.Reader) (written int64, handled bool, err error) {
-	// copy_file_range(2) does not support destinations opened with
-	// O_APPEND, so don't even try.
-	if f.appendMode {
-		return 0, false, nil
-	}
-
 	var (
 		remain int64
 		lr     *io.LimitedReader
@@ -109,7 +112,7 @@ func (f *File) copyFileRange(r io.Reader) (written int64, handled bool, err erro
 // the underlying io.Reader and the remaining amount of bytes if the assertion succeeds,
 // otherwise it just returns the original io.Reader and the theoretical unlimited remaining amount of bytes.
 func tryLimitedReader(r io.Reader) (*io.LimitedReader, io.Reader, int64) {
-	remain := int64(1 << 62)
+	var remain int64 = 1<<63 - 1 // by default, copy until EOF
 
 	lr, ok := r.(*io.LimitedReader)
 	if !ok {
