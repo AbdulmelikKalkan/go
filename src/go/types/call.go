@@ -228,7 +228,7 @@ func (check *Checker) callExpr(x *operand, call *ast.CallExpr) exprKind {
 	}
 
 	// evaluate arguments
-	args, _ := check.exprList(call.Args, false)
+	args := check.exprList(call.Args)
 	sig = check.arguments(call, sig, targs, args, xlist)
 
 	if wasGeneric && sig.TypeParams().Len() == 0 {
@@ -263,12 +263,12 @@ func (check *Checker) callExpr(x *operand, call *ast.CallExpr) exprKind {
 	return statement
 }
 
-func (check *Checker) exprList(elist []ast.Expr, allowCommaOk bool) (xlist []*operand, commaOk bool) {
+func (check *Checker) exprList(elist []ast.Expr) (xlist []*operand) {
 	switch len(elist) {
 	case 0:
 		// nothing to do
 	case 1:
-		return check.multiExpr(elist[0], allowCommaOk)
+		xlist, _ = check.multiExpr(elist[0], false)
 	default:
 		// multiple (possibly invalid) values
 		xlist = make([]*operand, len(elist))
@@ -744,22 +744,59 @@ Error:
 
 // use type-checks each argument.
 // Useful to make sure expressions are evaluated
-// (and variables are "used") in the presence of other errors.
-// The arguments may be nil.
-func (check *Checker) use(arg ...ast.Expr) {
+// (and variables are "used") in the presence of
+// other errors. Arguments may be nil.
+// Reports if all arguments evaluated without error.
+func (check *Checker) use(args ...ast.Expr) bool { return check.useN(args, false) }
+
+// useLHS is like use, but doesn't "use" top-level identifiers.
+// It should be called instead of use if the arguments are
+// expressions on the lhs of an assignment.
+func (check *Checker) useLHS(args ...ast.Expr) bool { return check.useN(args, true) }
+
+func (check *Checker) useN(args []ast.Expr, lhs bool) bool {
+	ok := true
+	for _, e := range args {
+		if !check.use1(e, lhs) {
+			ok = false
+		}
+	}
+	return ok
+}
+
+func (check *Checker) use1(e ast.Expr, lhs bool) bool {
 	var x operand
-	for _, e := range arg {
-		switch n := e.(type) {
-		case nil:
-			// some AST fields may be nil (e.g., the ast.SliceExpr.High field)
-			// TODO(gri) can those fields really make it here?
-			continue
-		case *ast.Ident:
-			// don't report an error evaluating blank
-			if n.Name == "_" {
-				continue
+	x.mode = value // anything but invalid
+	switch n := unparen(e).(type) {
+	case nil:
+		// nothing to do
+	case *ast.Ident:
+		// don't report an error evaluating blank
+		if n.Name == "_" {
+			break
+		}
+		// If the lhs is an identifier denoting a variable v, this assignment
+		// is not a 'use' of v. Remember current value of v.used and restore
+		// after evaluating the lhs via check.rawExpr.
+		var v *Var
+		var v_used bool
+		if lhs {
+			if _, obj := check.scope.LookupParent(n.Name, nopos); obj != nil {
+				// It's ok to mark non-local variables, but ignore variables
+				// from other packages to avoid potential race conditions with
+				// dot-imported variables.
+				if w, _ := obj.(*Var); w != nil && w.pkg == check.pkg {
+					v = w
+					v_used = v.used
+				}
 			}
 		}
-		check.rawExpr(&x, e, nil, false)
+		check.rawExpr(&x, n, nil, true)
+		if v != nil {
+			v.used = v_used // restore v.used
+		}
+	default:
+		check.rawExpr(&x, e, nil, true)
 	}
+	return x.mode != invalid
 }

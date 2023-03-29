@@ -226,7 +226,7 @@ func (check *Checker) callExpr(x *operand, call *syntax.CallExpr) exprKind {
 	}
 
 	// evaluate arguments
-	args, _ := check.exprList(call.ArgList, false)
+	args := check.exprList(call.ArgList)
 	sig = check.arguments(call, sig, targs, args, xlist)
 
 	if wasGeneric && sig.TypeParams().Len() == 0 {
@@ -261,12 +261,12 @@ func (check *Checker) callExpr(x *operand, call *syntax.CallExpr) exprKind {
 	return statement
 }
 
-func (check *Checker) exprList(elist []syntax.Expr, allowCommaOk bool) (xlist []*operand, commaOk bool) {
+func (check *Checker) exprList(elist []syntax.Expr) (xlist []*operand) {
 	switch len(elist) {
 	case 0:
 		// nothing to do
 	case 1:
-		return check.multiExpr(elist[0], allowCommaOk)
+		xlist, _ = check.multiExpr(elist[0], false)
 	default:
 		// multiple (possibly invalid) values
 		xlist = make([]*operand, len(elist))
@@ -697,26 +697,61 @@ Error:
 
 // use type-checks each argument.
 // Useful to make sure expressions are evaluated
-// (and variables are "used") in the presence of other errors.
-// The arguments may be nil.
-// TODO(gri) make this accept a []syntax.Expr and use an unpack function when we have a ListExpr?
-func (check *Checker) use(arg ...syntax.Expr) {
-	var x operand
-	for _, e := range arg {
-		switch n := e.(type) {
-		case nil:
-			// some AST fields may be nil (e.g., elements of syntax.SliceExpr.Index)
-			// TODO(gri) can those fields really make it here?
-			continue
-		case *syntax.Name:
-			// don't report an error evaluating blank
-			if n.Value == "_" {
-				continue
-			}
-		case *syntax.ListExpr:
-			check.use(n.ElemList...)
-			continue
+// (and variables are "used") in the presence of
+// other errors. Arguments may be nil.
+// Reports if all arguments evaluated without error.
+func (check *Checker) use(args ...syntax.Expr) bool { return check.useN(args, false) }
+
+// useLHS is like use, but doesn't "use" top-level identifiers.
+// It should be called instead of use if the arguments are
+// expressions on the lhs of an assignment.
+func (check *Checker) useLHS(args ...syntax.Expr) bool { return check.useN(args, true) }
+
+func (check *Checker) useN(args []syntax.Expr, lhs bool) bool {
+	ok := true
+	for _, e := range args {
+		if !check.use1(e, lhs) {
+			ok = false
 		}
-		check.rawExpr(&x, e, nil, false)
 	}
+	return ok
+}
+
+func (check *Checker) use1(e syntax.Expr, lhs bool) bool {
+	var x operand
+	x.mode = value // anything but invalid
+	switch n := unparen(e).(type) {
+	case nil:
+		// nothing to do
+	case *syntax.Name:
+		// don't report an error evaluating blank
+		if n.Value == "_" {
+			break
+		}
+		// If the lhs is an identifier denoting a variable v, this assignment
+		// is not a 'use' of v. Remember current value of v.used and restore
+		// after evaluating the lhs via check.rawExpr.
+		var v *Var
+		var v_used bool
+		if lhs {
+			if _, obj := check.scope.LookupParent(n.Value, nopos); obj != nil {
+				// It's ok to mark non-local variables, but ignore variables
+				// from other packages to avoid potential race conditions with
+				// dot-imported variables.
+				if w, _ := obj.(*Var); w != nil && w.pkg == check.pkg {
+					v = w
+					v_used = v.used
+				}
+			}
+		}
+		check.rawExpr(&x, n, nil, true)
+		if v != nil {
+			v.used = v_used // restore v.used
+		}
+	case *syntax.ListExpr:
+		return check.useN(n.ElemList, lhs)
+	default:
+		check.rawExpr(&x, e, nil, true)
+	}
+	return x.mode != invalid
 }
