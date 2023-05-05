@@ -583,16 +583,18 @@ type T[P any] []P
 				{`h`, []string{`int`}, `func([]int, *float32)`},
 			},
 		},
+		{`package issue59956; func f(func(int), func(string), func(bool)) {}; func g[P any](P) {}; func _() { f(g, g, g) }`,
+			[]testInst{
+				{`g`, []string{`int`}, `func(int)`},
+				{`g`, []string{`string`}, `func(string)`},
+				{`g`, []string{`bool`}, `func(bool)`},
+			},
+		},
 	}
 
 	for _, test := range tests {
 		imports := make(testImporter)
-		conf := Config{
-			Importer: imports,
-			// Unexported field: set below with boolFieldAddr
-			// _EnableReverseTypeInference: true,
-		}
-		*boolFieldAddr(&conf, "_EnableReverseTypeInference") = true
+		conf := Config{Importer: imports}
 		instMap := make(map[*ast.Ident]Instance)
 		useMap := make(map[*ast.Ident]Object)
 		makePkg := func(src string) *Package {

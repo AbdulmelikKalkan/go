@@ -96,10 +96,10 @@ func (check *Checker) funcInst(tsig *Signature, pos syntax.Pos, x *operand, inst
 		}
 
 		// Rename type parameters to avoid problems with recursive instantiations.
-		// Note that NewTuple(params...) below is nil if len(params) == 0, as desired.
+		// Note that NewTuple(params...) below is (*Tuple)(nil) if len(params) == 0, as desired.
 		tparams, params2 := check.renameTParams(pos, sig.TypeParams().list(), NewTuple(params...))
 
-		targs = check.infer(pos, tparams, targs, params2, args)
+		targs = check.infer(pos, tparams, targs, params2.(*Tuple), args)
 		if targs == nil {
 			// error was already reported
 			x.mode = invalid
@@ -489,17 +489,26 @@ func (check *Checker) arguments(call *syntax.CallExpr, sig *Signature, targs []T
 			}
 		}
 		// rename type parameters to avoid problems with recursive calls
-		tparams, sigParams = check.renameTParams(call.Pos(), sig.TypeParams().list(), sigParams)
+		var tmp Type
+		tparams, tmp = check.renameTParams(call.Pos(), sig.TypeParams().list(), sigParams)
+		sigParams = tmp.(*Tuple)
 	}
 
 	// collect type parameters from generic function arguments
 	var genericArgs []int // indices of generic function arguments
-	if check.conf.EnableReverseTypeInference {
+	if enableReverseTypeInference {
 		for i, arg := range args {
 			// generic arguments cannot have a defined (*Named) type - no need for underlying type below
 			if asig, _ := arg.typ.(*Signature); asig != nil && asig.TypeParams().Len() > 0 {
-				// TODO(gri) need to also rename type parameters for cases like f(g, g)
-				tparams = append(tparams, asig.TypeParams().list()...)
+				// Rename type parameters for cases like f(g, g); this gives each
+				// generic function argument a unique type identity (go.dev/issues/59956).
+				// TODO(gri) Consider only doing this if a function argument appears
+				//           multiple times, which is rare (possible optimization).
+				atparams, tmp := check.renameTParams(call.Pos(), asig.TypeParams().list(), asig)
+				asig = tmp.(*Signature)
+				asig.tparams = &TypeParamList{atparams} // renameTParams doesn't touch associated type parameters
+				arg.typ = asig                          // new type identity for the function argument
+				tparams = append(tparams, atparams...)
 				genericArgs = append(genericArgs, i)
 			}
 		}

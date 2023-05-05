@@ -1,5 +1,3 @@
-// -reverseTypeInference
-
 // Copyright 2023 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -88,7 +86,5 @@ func _() {
 	g2(f4)
 	g4(f6)
 	g5(f6, f7)
-
-	// TODO(gri) this should work (requires type parameter renaming for f1)
-	g6(f1, f1 /* ERROR "type func[P any](P) of f1 does not match func(string)" */)
+	g6(f1, f1)
 }

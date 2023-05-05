@@ -13,6 +13,13 @@ import (
 	"strings"
 )
 
+// If enableReverseTypeInference is set, uninstantiated and
+// partially instantiated generic functions may be assigned
+// (incl. returned) to variables of function type and type
+// inference will attempt to infer the missing type arguments.
+// Available with go1.21.
+const enableReverseTypeInference = true // disable for debugging
+
 // infer attempts to infer the complete set of type arguments for generic function instantiation/call
 // based on the given type parameters tparams, type arguments targs, function parameters params, and
 // function arguments args, if any. There must be at least one type parameter, no more type arguments
@@ -349,6 +356,9 @@ func (check *Checker) infer(pos syntax.Pos, tparams []*TypeParam, targs []Type, 
 	}
 
 	for len(dirty) > 0 {
+		if traceInference {
+			u.tracef("-- simplify %s ➞ %s", tparams, inferred)
+		}
 		// TODO(gri) Instead of creating a new substMap for each iteration,
 		// provide an update operation for substMaps and only change when
 		// needed. Optimization.
@@ -357,6 +367,21 @@ func (check *Checker) infer(pos syntax.Pos, tparams []*TypeParam, targs []Type, 
 		for _, index := range dirty {
 			t0 := inferred[index]
 			if t1 := check.subst(nopos, t0, smap, nil, check.context()); t1 != t0 {
+				// t0 was simplified to t1.
+				// If t0 was a generic function, but the simplifed signature t1 does
+				// not contain any type parameters anymore, the function is not generic
+				// anymore. Remove it's type parameters. (go.dev/issue/59953)
+				// Note that if t0 was a signature, t1 must be a signature, and t1
+				// can only be a generic signature if it originated from a generic
+				// function argument. Those signatures are never defined types and
+				// thus there is no need to call under below.
+				// TODO(gri) Consider doing this in Checker.subst.
+				//           Then this would fall out automatically here and also
+				//           in instantiation (where we also explicitly nil out
+				//           type parameters). See the *Signature TODO in subst.
+				if sig, _ := t1.(*Signature); sig != nil && sig.TypeParams().Len() > 0 && !isParameterized(tparams, sig) {
+					sig.tparams = nil
+				}
 				inferred[index] = t1
 				dirty[n] = index
 				n++
@@ -380,11 +405,14 @@ func (check *Checker) infer(pos syntax.Pos, tparams []*TypeParam, targs []Type, 
 	return
 }
 
-// renameTParams renames the type parameters in a function signature described by its
-// type and ordinary parameters (tparams and params) such that each type parameter is
-// given a new identity. renameTParams returns the new type and ordinary parameters.
+// renameTParams renames the type parameters in the given type such that each type
+// parameter is given a new identity. renameTParams returns the new type parameters
+// and updated type. If the result type is unchanged from the argument type, none
+// of the type parameters in tparams occurred in the type.
+// If typ is a generic function, type parameters held with typ are not changed and
+// must be updated separately if desired.
 // The positions is only used for debug traces.
-func (check *Checker) renameTParams(pos syntax.Pos, tparams []*TypeParam, params *Tuple) ([]*TypeParam, *Tuple) {
+func (check *Checker) renameTParams(pos syntax.Pos, tparams []*TypeParam, typ Type) ([]*TypeParam, Type) {
 	// For the purpose of type inference we must differentiate type parameters
 	// occurring in explicit type or value function arguments from the type
 	// parameters we are solving for via unification because they may be the
@@ -413,7 +441,7 @@ func (check *Checker) renameTParams(pos syntax.Pos, tparams []*TypeParam, params
 	// Type parameter renaming turns the first example into the second
 	// example by renaming the type parameter P into P2.
 	if len(tparams) == 0 {
-		return nil, params // nothing to do
+		return nil, typ // nothing to do
 	}
 
 	tparams2 := make([]*TypeParam, len(tparams))
@@ -428,7 +456,7 @@ func (check *Checker) renameTParams(pos syntax.Pos, tparams []*TypeParam, params
 		tparams2[i].bound = check.subst(pos, tparam.bound, renameMap, nil, check.context())
 	}
 
-	return tparams2, check.subst(pos, params, renameMap, nil, check.context()).(*Tuple)
+	return tparams2, check.subst(pos, typ, renameMap, nil, check.context())
 }
 
 // typeParamsString produces a string containing all the type parameter names
@@ -459,6 +487,8 @@ func typeParamsString(list []*TypeParam) string {
 }
 
 // isParameterized reports whether typ contains any of the type parameters of tparams.
+// If typ is a generic function, isParameterized ignores the type parameter declarations;
+// it only considers the signature proper (incoming and result parameters).
 func isParameterized(tparams []*TypeParam, typ Type) bool {
 	w := tpWalker{
 		tparams: tparams,
