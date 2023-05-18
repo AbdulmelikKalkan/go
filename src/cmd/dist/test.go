@@ -6,8 +6,10 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -40,6 +42,7 @@ func cmdtest() {
 			"Special exception: if the string begins with '!', the match is inverted.")
 	flag.BoolVar(&t.msan, "msan", false, "run in memory sanitizer builder mode")
 	flag.BoolVar(&t.asan, "asan", false, "run in address sanitizer builder mode")
+	flag.BoolVar(&t.json, "json", false, "report test results in JSON")
 
 	xflagparse(-1) // any number of args
 	if noRebuild {
@@ -69,6 +72,7 @@ type tester struct {
 	short      bool
 	cgoEnabled bool
 	partial    bool
+	json       bool
 
 	tests        []distTest // use addTest to extend
 	testNames    map[string]bool
@@ -81,9 +85,9 @@ type tester struct {
 
 type work struct {
 	dt    *distTest
-	cmd   *exec.Cmd
+	cmd   *exec.Cmd // Must write stdout/stderr to work.out
 	start chan bool
-	out   []byte
+	out   bytes.Buffer
 	err   error
 	end   chan bool
 }
@@ -211,12 +215,14 @@ func (t *tester) run() {
 		}
 	}
 
-	if err := t.maybeLogMetadata(); err != nil {
-		t.failed = true
-		if t.keepGoing {
-			log.Printf("Failed logging metadata: %v", err)
-		} else {
-			fatalf("Failed logging metadata: %v", err)
+	if !t.json {
+		if err := t.maybeLogMetadata(); err != nil {
+			t.failed = true
+			if t.keepGoing {
+				log.Printf("Failed logging metadata: %v", err)
+			} else {
+				fatalf("Failed logging metadata: %v", err)
+			}
 		}
 	}
 
@@ -239,13 +245,17 @@ func (t *tester) run() {
 	t.runPending(nil)
 	timelog("end", "dist test")
 
+	if !t.json {
+		if t.failed {
+			fmt.Println("\nFAILED")
+		} else if t.partial {
+			fmt.Println("\nALL TESTS PASSED (some were excluded)")
+		} else {
+			fmt.Println("\nALL TESTS PASSED")
+		}
+	}
 	if t.failed {
-		fmt.Println("\nFAILED")
 		xexit(1)
-	} else if t.partial {
-		fmt.Println("\nALL TESTS PASSED (some were excluded)")
-	} else {
-		fmt.Println("\nALL TESTS PASSED")
 	}
 }
 
@@ -301,7 +311,8 @@ type goTest struct {
 	runOnHost bool // When cross-compiling, run this test on the host instead of guest
 
 	// variant, if non-empty, is a name used to distinguish different
-	// configurations of the same test package(s).
+	// configurations of the same test package(s). If set and sharded is false,
+	// the Package field in test2json output is rewritten to pkg:variant.
 	variant string
 	// sharded indicates that variant is used solely for sharding and that
 	// the set of test names run by each variant of a package is non-overlapping.
@@ -315,9 +326,9 @@ type goTest struct {
 	testFlags []string // Additional flags accepted by this test
 }
 
-// bgCommand returns a go test Cmd. The result has Stdout and Stderr set to nil
-// and is intended to be added to the work queue.
-func (opts *goTest) bgCommand(t *tester) *exec.Cmd {
+// bgCommand returns a go test Cmd. The result will write its output to stdout
+// and stderr. If stdout==stderr, bgCommand ensures Writes are serialized.
+func (opts *goTest) bgCommand(t *tester, stdout, stderr io.Writer) *exec.Cmd {
 	goCmd, build, run, pkgs, testFlags, setupCmd := opts.buildArgs(t)
 
 	// Combine the flags.
@@ -334,16 +345,39 @@ func (opts *goTest) bgCommand(t *tester) *exec.Cmd {
 
 	cmd := exec.Command(goCmd, args...)
 	setupCmd(cmd)
+	if t.json && opts.variant != "" && !opts.sharded {
+		// Rewrite Package in the JSON output to be pkg:variant. For sharded
+		// variants, pkg.TestName is already unambiguous, so we don't need to
+		// rewrite the Package field.
+		if len(opts.pkgs) != 0 {
+			panic("cannot combine multiple packages with variants")
+		}
+		// We only want to process JSON on the child's stdout. Ideally if
+		// stdout==stderr, we would also use the same testJSONFilter for
+		// cmd.Stdout and cmd.Stderr in order to keep the underlying
+		// interleaving of writes, but then it would see even partial writes
+		// interleaved, which would corrupt the JSON. So, we only process
+		// cmd.Stdout. This has another consequence though: if stdout==stderr,
+		// we have to serialize Writes in case the Writer is not concurrent
+		// safe. If we were just passing stdout/stderr through to exec, it would
+		// do this for us, but since we're wrapping stdout, we have to do it
+		// ourselves.
+		if stdout == stderr {
+			stdout = &lockedWriter{w: stdout}
+			stderr = stdout
+		}
+		cmd.Stdout = &testJSONFilter{w: stdout, variant: opts.variant}
+	} else {
+		cmd.Stdout = stdout
+	}
+	cmd.Stderr = stderr
 
 	return cmd
 }
 
 // command returns a go test Cmd intended to be run immediately.
 func (opts *goTest) command(t *tester) *exec.Cmd {
-	cmd := opts.bgCommand(t)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
+	return opts.bgCommand(t, os.Stdout, os.Stderr)
 }
 
 func (opts *goTest) run(t *tester) error {
@@ -402,6 +436,9 @@ func (opts *goTest) buildArgs(t *tester) (goCmd string, build, run, pkgs, testFl
 	}
 	if opts.cpu != "" {
 		run = append(run, "-cpu="+opts.cpu)
+	}
+	if t.json {
+		run = append(run, "-json")
 	}
 
 	if opts.gcflags != "" {
@@ -912,13 +949,13 @@ type registerTestOpt interface {
 	isRegisterTestOpt()
 }
 
-// rtPreFunc is a registerTest option that runs a pre function before running
-// the test.
-type rtPreFunc struct {
-	pre func(*distTest) bool // Return false to skip the test
+// rtSkipFunc is a registerTest option that runs a skip check function before
+// running the test.
+type rtSkipFunc struct {
+	skip func(*distTest) (string, bool) // Return message, true to skip the test
 }
 
-func (rtPreFunc) isRegisterTestOpt() {}
+func (rtSkipFunc) isRegisterTestOpt() {}
 
 // registerTest registers a test that runs the given goTest.
 //
@@ -937,37 +974,54 @@ func (t *tester) registerTest(name, heading string, test *goTest, opts ...regist
 		}
 		t.variantNames[variantName] = true
 	}
-	var preFunc func(*distTest) bool
+	var skipFunc func(*distTest) (string, bool)
 	for _, opt := range opts {
 		switch opt := opt.(type) {
-		case rtPreFunc:
-			preFunc = opt.pre
+		case rtSkipFunc:
+			skipFunc = opt.skip
 		}
 	}
 	t.addTest(name, heading, func(dt *distTest) error {
-		if preFunc != nil && !preFunc(dt) {
-			return nil
+		if skipFunc != nil {
+			msg, skip := skipFunc(dt)
+			if skip {
+				t.printSkip(test, msg)
+				return nil
+			}
 		}
-		w := &work{
-			dt:  dt,
-			cmd: test.bgCommand(t),
-		}
+		w := &work{dt: dt}
+		w.cmd = test.bgCommand(t, &w.out, &w.out)
 		t.worklist = append(t.worklist, w)
 		return nil
 	})
 }
 
-// bgDirCmd constructs a Cmd intended to be run in the background as
-// part of the worklist. The worklist runner will buffer its output
-// and replay it sequentially. The command will be run in dir.
-func (t *tester) bgDirCmd(dir, bin string, args ...string) *exec.Cmd {
-	cmd := exec.Command(bin, args...)
-	if filepath.IsAbs(dir) {
-		setDir(cmd, dir)
-	} else {
-		setDir(cmd, filepath.Join(goroot, dir))
+func (t *tester) printSkip(test *goTest, msg string) {
+	if !t.json {
+		fmt.Println(msg)
+		return
 	}
-	return cmd
+	type event struct {
+		Time    time.Time
+		Action  string
+		Package string
+		Output  string `json:",omitempty"`
+	}
+	out := json.NewEncoder(os.Stdout)
+	for _, pkg := range test.packages() {
+		variantName := pkg
+		if test.variant != "" {
+			variantName += ":" + test.variant
+		}
+		ev := event{Time: time.Now(), Package: variantName, Action: "start"}
+		out.Encode(ev)
+		ev.Action = "output"
+		ev.Output = msg
+		out.Encode(ev)
+		ev.Action = "skip"
+		ev.Output = ""
+		out.Encode(ev)
+	}
 }
 
 // dirCmd constructs a Cmd intended to be run in the foreground.
@@ -975,7 +1029,12 @@ func (t *tester) bgDirCmd(dir, bin string, args ...string) *exec.Cmd {
 // and os.Stderr.
 func (t *tester) dirCmd(dir string, cmdline ...interface{}) *exec.Cmd {
 	bin, args := flattenCmdline(cmdline)
-	cmd := t.bgDirCmd(dir, bin, args...)
+	cmd := exec.Command(bin, args...)
+	if filepath.IsAbs(dir) {
+		setDir(cmd, dir)
+	} else {
+		setDir(cmd, filepath.Join(goroot, dir))
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if vflag > 1 {
@@ -995,7 +1054,7 @@ func flattenCmdline(cmdline []interface{}) (bin string, args []string) {
 		case []string:
 			list = append(list, x...)
 		default:
-			panic("invalid addCmd argument type: " + reflect.TypeOf(x).String())
+			panic("invalid dirCmd argument type: " + reflect.TypeOf(x).String())
 		}
 	}
 
@@ -1006,24 +1065,14 @@ func flattenCmdline(cmdline []interface{}) (bin string, args []string) {
 	return bin, list[1:]
 }
 
-// addCmd adds a command to the worklist. Commands can be run in
-// parallel, but their output will be buffered and replayed in the
-// order they were added to worklist.
-func (t *tester) addCmd(dt *distTest, dir string, cmdline ...interface{}) *exec.Cmd {
-	bin, args := flattenCmdline(cmdline)
-	w := &work{
-		dt:  dt,
-		cmd: t.bgDirCmd(dir, bin, args...),
-	}
-	t.worklist = append(t.worklist, w)
-	return w.cmd
-}
-
 func (t *tester) iOS() bool {
 	return goos == "ios"
 }
 
 func (t *tester) out(v string) {
+	if t.json {
+		return
+	}
 	if t.banner == "" {
 		return
 	}
@@ -1170,13 +1219,12 @@ func (t *tester) registerCgoTests(heading string) {
 			// -fPIC fundamentally.)
 		default:
 			// Check for static linking support
-			var staticCheck rtPreFunc
+			var staticCheck rtSkipFunc
 			ccName := compilerEnvLookup("CC", defaultcc, goos, goarch)
 			cc, err := exec.LookPath(ccName)
 			if err != nil {
-				staticCheck.pre = func(*distTest) bool {
-					fmt.Printf("$CC (%q) not found, skip cgo static linking test.\n", ccName)
-					return false
+				staticCheck.skip = func(*distTest) (string, bool) {
+					return fmt.Sprintf("$CC (%q) not found, skip cgo static linking test.", ccName), true
 				}
 			} else {
 				cmd := t.dirCmd("src/cmd/cgo/internal/test", cc, "-xc", "-o", "/dev/null", "-static", "-")
@@ -1184,9 +1232,8 @@ func (t *tester) registerCgoTests(heading string) {
 				cmd.Stdout, cmd.Stderr = nil, nil // Discard output
 				if err := cmd.Run(); err != nil {
 					// Skip these tests
-					staticCheck.pre = func(*distTest) bool {
-						fmt.Println("No support for static linking found (lacks libc.a?), skip cgo static linking test.")
-						return false
+					staticCheck.skip = func(*distTest) (string, bool) {
+						return "No support for static linking found (lacks libc.a?), skip cgo static linking test.", true
 					}
 				}
 			}
@@ -1195,10 +1242,9 @@ func (t *tester) registerCgoTests(heading string) {
 			// a C linker warning on Linux.
 			// in function `bio_ip_and_port_to_socket_and_addr':
 			// warning: Using 'getaddrinfo' in statically linked applications requires at runtime the shared libraries from the glibc version used for linking
-			if staticCheck.pre == nil && goos == "linux" && strings.Contains(goexperiment, "boringcrypto") {
-				staticCheck.pre = func(*distTest) bool {
-					fmt.Println("skipping static linking check on Linux when using boringcrypto to avoid C linker warning about getaddrinfo")
-					return false
+			if staticCheck.skip == nil && goos == "linux" && strings.Contains(goexperiment, "boringcrypto") {
+				staticCheck.skip = func(*distTest) (string, bool) {
+					return "skipping static linking check on Linux when using boringcrypto to avoid C linker warning about getaddrinfo", true
 				}
 			}
 
@@ -1246,17 +1292,23 @@ func (t *tester) runPending(nextTest *distTest) {
 	for _, w := range worklist {
 		w.start = make(chan bool)
 		w.end = make(chan bool)
+		// w.cmd must be set up to write to w.out. We can't check that, but we
+		// can check for easy mistakes.
+		if w.cmd.Stdout == nil || w.cmd.Stdout == os.Stdout || w.cmd.Stderr == nil || w.cmd.Stderr == os.Stderr {
+			panic("work.cmd.Stdout/Stderr must be redirected")
+		}
 		go func(w *work) {
 			if !<-w.start {
 				timelog("skip", w.dt.name)
-				w.out = []byte(fmt.Sprintf("skipped due to earlier error\n"))
+				w.out.WriteString("skipped due to earlier error\n")
 			} else {
 				timelog("start", w.dt.name)
-				w.out, w.err = w.cmd.CombinedOutput()
+				w.err = w.cmd.Run()
 				if w.err != nil {
 					if isUnsupportedVMASize(w) {
 						timelog("skip", w.dt.name)
-						w.out = []byte(fmt.Sprintf("skipped due to unsupported VMA\n"))
+						w.out.Reset()
+						w.out.WriteString("skipped due to unsupported VMA\n")
 						w.err = nil
 					}
 				}
@@ -1293,7 +1345,9 @@ func (t *tester) runPending(nextTest *distTest) {
 		}
 		ended++
 		<-w.end
-		os.Stdout.Write(w.out)
+		os.Stdout.Write(w.out.Bytes())
+		// We no longer need the output, so drop the buffer.
+		w.out = bytes.Buffer{}
 		if w.err != nil {
 			log.Printf("Failed: %v", w.err)
 			t.failed = true
@@ -1620,7 +1674,7 @@ func buildModeSupported(compiler, buildmode, goos, goarch string) bool {
 // arm64 machine configured with 39-bit VMA)
 func isUnsupportedVMASize(w *work) bool {
 	unsupportedVMA := []byte("unsupported VMA range")
-	return w.dt.name == "race" && bytes.Contains(w.out, unsupportedVMA)
+	return w.dt.name == "race" && bytes.Contains(w.out.Bytes(), unsupportedVMA)
 }
 
 // isEnvSet reports whether the environment variable evar is
