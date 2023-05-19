@@ -349,9 +349,7 @@ func (opts *goTest) bgCommand(t *tester, stdout, stderr io.Writer) *exec.Cmd {
 		// Rewrite Package in the JSON output to be pkg:variant. For sharded
 		// variants, pkg.TestName is already unambiguous, so we don't need to
 		// rewrite the Package field.
-		if len(opts.pkgs) != 0 {
-			panic("cannot combine multiple packages with variants")
-		}
+		//
 		// We only want to process JSON on the child's stdout. Ideally if
 		// stdout==stderr, we would also use the same testJSONFilter for
 		// cmd.Stdout and cmd.Stderr in order to keep the underlying
@@ -577,23 +575,6 @@ func (t *tester) registerTests() {
 	// whose test registration happens in a special way.
 	registerStdTestSpecially := map[string]bool{
 		"cmd/internal/testdir": true, // Registered at the bottom with sharding.
-		// cgo tests are registered specially because they involve unusual build
-		// conditions and flags.
-		"cmd/cgo/internal/teststdio":      true,
-		"cmd/cgo/internal/testlife":       true,
-		"cmd/cgo/internal/testfortran":    true,
-		"cmd/cgo/internal/test":           true,
-		"cmd/cgo/internal/testnocgo":      true,
-		"cmd/cgo/internal/testtls":        true,
-		"cmd/cgo/internal/testgodefs":     true,
-		"cmd/cgo/internal/testso":         true,
-		"cmd/cgo/internal/testsovar":      true,
-		"cmd/cgo/internal/testcarchive":   true,
-		"cmd/cgo/internal/testcshared":    true,
-		"cmd/cgo/internal/testshared":     true,
-		"cmd/cgo/internal/testplugin":     true,
-		"cmd/cgo/internal/testsanitizers": true,
-		"cmd/cgo/internal/testerrors":     true,
 	}
 
 	// Fast path to avoid the ~1 second of `go list std cmd` when
@@ -849,43 +830,8 @@ func (t *tester) registerTests() {
 	}
 
 	const cgoHeading = "Testing cgo"
-	if t.cgoEnabled && !t.iOS() {
-		// Disabled on iOS. golang.org/issue/15919
-		t.registerTest("cgo_teststdio", cgoHeading, &goTest{pkg: "cmd/cgo/internal/teststdio", timeout: 5 * time.Minute})
-		t.registerTest("cgo_testlife", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testlife", timeout: 5 * time.Minute})
-		if goos != "android" {
-			t.registerTest("cgo_testfortran", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testfortran", timeout: 5 * time.Minute})
-		}
-	}
 	if t.cgoEnabled {
 		t.registerCgoTests(cgoHeading)
-	}
-
-	// Don't run these tests with $GO_GCFLAGS because most of them
-	// assume that they can run "go install" with no -gcflags and not
-	// recompile the entire standard library. If make.bash ran with
-	// special -gcflags, that's not true.
-	if t.cgoEnabled && gogcflags == "" {
-		t.registerTest("cgo_testgodefs", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testgodefs", timeout: 5 * time.Minute})
-
-		t.registerTest("cgo_testso", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testso", timeout: 600 * time.Second})
-		t.registerTest("cgo_testsovar", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testsovar", timeout: 600 * time.Second})
-		if t.supportedBuildmode("c-archive") {
-			t.registerTest("cgo_testcarchive", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testcarchive", timeout: 5 * time.Minute})
-		}
-		if t.supportedBuildmode("c-shared") {
-			t.registerTest("cgo_testcshared", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testcshared", timeout: 5 * time.Minute})
-		}
-		if t.supportedBuildmode("shared") {
-			t.registerTest("cgo_testshared", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testshared", timeout: 600 * time.Second})
-		}
-		if t.supportedBuildmode("plugin") {
-			t.registerTest("cgo_testplugin", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testplugin", timeout: 600 * time.Second})
-		}
-		t.registerTest("cgo_testsanitizers", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testsanitizers", timeout: 5 * time.Minute})
-		if t.hasBash() && goos != "android" && !t.iOS() && gohostos != "windows" {
-			t.registerTest("cgo_errors", cgoHeading, &goTest{pkg: "cmd/cgo/internal/testerrors", timeout: 5 * time.Minute})
-		}
 	}
 
 	if goos != "android" && !t.iOS() {
@@ -1145,7 +1091,11 @@ func (t *tester) registerCgoTests(heading string) {
 			variant:   variant,
 			pkg:       "cmd/cgo/internal/" + subdir,
 			buildmode: buildmode,
-			ldflags:   "-linkmode=" + linkmode,
+		}
+		var ldflags []string
+		if linkmode != "auto" {
+			// "auto" is the default, so avoid cluttering the command line for "auto"
+			ldflags = append(ldflags, "-linkmode="+linkmode)
 		}
 
 		if linkmode == "internal" {
@@ -1159,7 +1109,7 @@ func (t *tester) registerCgoTests(heading string) {
 			// cgoTest we want static linking.
 			gt.buildmode = ""
 			if linkmode == "external" {
-				gt.ldflags += ` -extldflags "-static -pthread"`
+				ldflags = append(ldflags, `-extldflags "-static -pthread"`)
 			} else if linkmode == "auto" {
 				gt.env = append(gt.env, "CGO_LDFLAGS=-static -pthread")
 			} else {
@@ -1167,12 +1117,15 @@ func (t *tester) registerCgoTests(heading string) {
 			}
 			gt.tags = append(gt.tags, "static")
 		}
+		gt.ldflags = strings.Join(ldflags, " ")
 
 		t.registerTest("cgo:"+subdir+":"+variant, heading, gt, opts...)
 		return gt
 	}
 
-	cgoTest("auto", "test", "auto", "")
+	// test, testtls, and testnocgo are run with linkmode="auto", buildmode=""
+	// as part of go test cmd. Here we only have to register the non-default
+	// build modes of these tests.
 
 	// Stub out various buildmode=pie tests  on alpine until 54354 resolved.
 	builderName := os.Getenv("GO_BUILDER_NAME")
@@ -1206,7 +1159,6 @@ func (t *tester) registerCgoTests(heading string) {
 		gt := cgoTest("external-g0", "test", "external", "")
 		gt.env = append(gt.env, "CGO_CFLAGS=-g0 -fdiagnostics-color")
 
-		cgoTest("auto", "testtls", "auto", "")
 		cgoTest("external", "testtls", "external", "")
 		switch {
 		case os == "aix":
@@ -1253,7 +1205,6 @@ func (t *tester) registerCgoTests(heading string) {
 				// TODO(#56629): Why does this fail on netbsd-arm?
 				cgoTest("static", "testtls", "external", "static", staticCheck)
 			}
-			cgoTest("auto", "testnocgo", "auto", "", staticCheck)
 			cgoTest("external", "testnocgo", "external", "", staticCheck)
 			if goos != "android" {
 				cgoTest("static", "testnocgo", "external", "static", staticCheck)
