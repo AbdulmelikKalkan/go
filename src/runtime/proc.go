@@ -284,7 +284,7 @@ func main() {
 		}
 	}
 	if panicking.Load() != 0 {
-		gopark(nil, nil, waitReasonPanicWait, traceEvGoStop, 1)
+		gopark(nil, nil, waitReasonPanicWait, traceBlockForever, 1)
 	}
 	runExitHooks(0)
 
@@ -319,7 +319,7 @@ func forcegchelper() {
 			throw("forcegc: phase error")
 		}
 		forcegc.idle.Store(true)
-		goparkunlock(&forcegc.lock, waitReasonForceGCIdle, traceEvGoBlock, 1)
+		goparkunlock(&forcegc.lock, waitReasonForceGCIdle, traceBlockSystemGoroutine, 1)
 		// this goroutine is explicitly resumed by sysmon
 		if debug.gctrace > 0 {
 			println("GC forced")
@@ -378,7 +378,7 @@ func goschedIfBusy() {
 // Reason explains why the goroutine has been parked. It is displayed in stack
 // traces and heap dumps. Reasons should be unique and descriptive. Do not
 // re-use reasons, add new ones.
-func gopark(unlockf func(*g, unsafe.Pointer) bool, lock unsafe.Pointer, reason waitReason, traceEv byte, traceskip int) {
+func gopark(unlockf func(*g, unsafe.Pointer) bool, lock unsafe.Pointer, reason waitReason, traceReason traceBlockReason, traceskip int) {
 	if reason != waitReasonSleep {
 		checkTimeouts() // timeouts may expire while two goroutines keep the scheduler busy
 	}
@@ -391,8 +391,8 @@ func gopark(unlockf func(*g, unsafe.Pointer) bool, lock unsafe.Pointer, reason w
 	mp.waitlock = lock
 	mp.waitunlockf = unlockf
 	gp.waitreason = reason
-	mp.waittraceev = traceEv
-	mp.waittraceskip = traceskip
+	mp.waitTraceBlockReason = traceReason
+	mp.waitTraceSkip = traceskip
 	releasem(mp)
 	// can't do anything that might move the G between Ms here.
 	mcall(park_m)
@@ -400,8 +400,8 @@ func gopark(unlockf func(*g, unsafe.Pointer) bool, lock unsafe.Pointer, reason w
 
 // Puts the current goroutine into a waiting state and unlocks the lock.
 // The goroutine can be made runnable again by calling goready(gp).
-func goparkunlock(lock *mutex, reason waitReason, traceEv byte, traceskip int) {
-	gopark(parkunlock_c, unsafe.Pointer(lock), reason, traceEv, traceskip)
+func goparkunlock(lock *mutex, reason waitReason, traceReason traceBlockReason, traceskip int) {
+	gopark(parkunlock_c, unsafe.Pointer(lock), reason, traceReason, traceskip)
 }
 
 func goready(gp *g, traceskip int) {
@@ -1157,6 +1157,59 @@ func casGFromPreempted(gp *g, old, new uint32) bool {
 	return gp.atomicstatus.CompareAndSwap(_Gpreempted, _Gwaiting)
 }
 
+// stwReason is an enumeration of reasons the world is stopping.
+type stwReason uint8
+
+// Reasons to stop-the-world.
+//
+// Avoid reusing reasons and add new ones instead.
+const (
+	stwUnknown                     stwReason = iota // "unknown"
+	stwGCMarkTerm                                   // "GC mark termination"
+	stwGCSweepTerm                                  // "GC sweep termination"
+	stwWriteHeapDump                                // "write heap dump"
+	stwGoroutineProfile                             // "goroutine profile"
+	stwGoroutineProfileCleanup                      // "goroutine profile cleanup"
+	stwAllGoroutinesStack                           // "all goroutines stack trace"
+	stwReadMemStats                                 // "read mem stats"
+	stwAllThreadsSyscall                            // "AllThreadsSyscall"
+	stwGOMAXPROCS                                   // "GOMAXPROCS"
+	stwStartTrace                                   // "start trace"
+	stwStopTrace                                    // "stop trace"
+	stwForTestCountPagesInUse                       // "CountPagesInUse (test)"
+	stwForTestReadMetricsSlow                       // "ReadMetricsSlow (test)"
+	stwForTestReadMemStatsSlow                      // "ReadMemStatsSlow (test)"
+	stwForTestPageCachePagesLeaked                  // "PageCachePagesLeaked (test)"
+	stwForTestResetDebugLog                         // "ResetDebugLog (test)"
+)
+
+func (r stwReason) String() string {
+	return stwReasonStrings[r]
+}
+
+// If you add to this list, also add it to src/internal/trace/parser.go.
+// If you change the values of any of the stw* constants, bump the trace
+// version number and make a copy of this.
+var stwReasonStrings = [...]string{
+	stwUnknown:                     "unknown",
+	stwGCMarkTerm:                  "GC mark termination",
+	stwGCSweepTerm:                 "GC sweep termination",
+	stwWriteHeapDump:               "write heap dump",
+	stwGoroutineProfile:            "goroutine profile",
+	stwGoroutineProfileCleanup:     "goroutine profile cleanup",
+	stwAllGoroutinesStack:          "all goroutines stack trace",
+	stwReadMemStats:                "read mem stats",
+	stwAllThreadsSyscall:           "AllThreadsSyscall",
+	stwGOMAXPROCS:                  "GOMAXPROCS",
+	stwStartTrace:                  "start trace",
+	stwStopTrace:                   "stop trace",
+	stwForTestCountPagesInUse:      "CountPagesInUse (test)",
+	stwForTestReadMetricsSlow:      "ReadMetricsSlow (test)",
+	stwForTestReadMemStatsSlow:     "ReadMemStatsSlow (test)",
+	stwForTestPageCachePagesLeaked: "PageCachePagesLeaked (test)",
+	stwForTestResetDebugLog:        "ResetDebugLog (test)",
+}
+
 // stopTheWorld stops all P's from executing goroutines, interrupting
 // all goroutines at GC safe points and records reason as the reason
 // for the stop. On return, only the current goroutine's P is running.
@@ -1171,10 +1224,10 @@ func casGFromPreempted(gp *g, old, new uint32) bool {
 // This is also used by routines that do stack dumps. If the system is
 // in panic or being exited, this may not reliably stop all
 // goroutines.
-func stopTheWorld(reason string) {
+func stopTheWorld(reason stwReason) {
 	semacquire(&worldsema)
 	gp := getg()
-	gp.m.preemptoff = reason
+	gp.m.preemptoff = reason.String()
 	systemstack(func() {
 		// Mark the goroutine which called stopTheWorld preemptible so its
 		// stack may be scanned.
@@ -1188,14 +1241,14 @@ func stopTheWorld(reason string) {
 		// have already completed by the time we exit.
 		// Don't provide a wait reason because we're still executing.
 		casGToWaiting(gp, _Grunning, waitReasonStoppingTheWorld)
-		stopTheWorldWithSema()
+		stopTheWorldWithSema(reason)
 		casgstatus(gp, _Gwaiting, _Grunning)
 	})
 }
 
 // startTheWorld undoes the effects of stopTheWorld.
 func startTheWorld() {
-	systemstack(func() { startTheWorldWithSema(false) })
+	systemstack(func() { startTheWorldWithSema() })
 
 	// worldsema must be held over startTheWorldWithSema to ensure
 	// gomaxprocs cannot change while worldsema is held.
@@ -1221,7 +1274,7 @@ func startTheWorld() {
 // stopTheWorldGC has the same effect as stopTheWorld, but blocks
 // until the GC is not running. It also blocks a GC from starting
 // until startTheWorldGC is called.
-func stopTheWorldGC(reason string) {
+func stopTheWorldGC(reason stwReason) {
 	semacquire(&gcsema)
 	stopTheWorld(reason)
 }
@@ -1265,7 +1318,10 @@ var gcsema uint32 = 1
 // startTheWorldWithSema and stopTheWorldWithSema.
 // Holding worldsema causes any other goroutines invoking
 // stopTheWorld to block.
-func stopTheWorldWithSema() {
+func stopTheWorldWithSema(reason stwReason) {
+	if traceEnabled() {
+		traceSTWStart(reason)
+	}
 	gp := getg()
 
 	// If we hold a lock, then we won't be able to stop another M
@@ -1344,7 +1400,7 @@ func stopTheWorldWithSema() {
 	worldStopped()
 }
 
-func startTheWorldWithSema(emitTraceEvent bool) int64 {
+func startTheWorldWithSema() int64 {
 	assertWorldStopped()
 
 	mp := acquirem() // disable preemption because it can be holding p in a local var
@@ -1388,8 +1444,8 @@ func startTheWorldWithSema(emitTraceEvent bool) int64 {
 
 	// Capture start-the-world time before doing clean-up tasks.
 	startTime := nanotime()
-	if emitTraceEvent {
-		traceGCSTWDone()
+	if traceEnabled() {
+		traceSTWDone()
 	}
 
 	// Wakeup an additional proc in case we have excessive runnable goroutines
@@ -3622,7 +3678,7 @@ func park_m(gp *g) {
 	mp := getg().m
 
 	if traceEnabled() {
-		traceGoPark(mp.waittraceev, mp.waittraceskip)
+		traceGoPark(mp.waitTraceBlockReason, mp.waitTraceSkip)
 	}
 
 	// N.B. Not using casGToWaiting here because the waitreason is
@@ -3693,7 +3749,7 @@ func gopreempt_m(gp *g) {
 //go:systemstack
 func preemptPark(gp *g) {
 	if traceEnabled() {
-		traceGoPark(traceEvGoBlock, 0)
+		traceGoPark(traceBlockPreempted, 0)
 	}
 	status := readgstatus(gp)
 	if status&^_Gscan != _Grunning {
@@ -4117,7 +4173,7 @@ func exitsyscall() {
 		// Tracing code can invoke write barriers that cannot run without a P.
 		// So instead we remember the syscall exit time and emit the event
 		// in execute when we have a P.
-		gp.trace.sysExitTicks = cputicks()
+		gp.trace.sysExitTime = traceClockNow()
 	}
 
 	gp.m.locks--
