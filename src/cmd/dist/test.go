@@ -574,7 +574,8 @@ func (t *tester) registerTests() {
 	// registerStdTestSpecially tracks import paths in the standard library
 	// whose test registration happens in a special way.
 	registerStdTestSpecially := map[string]bool{
-		"cmd/internal/testdir": true, // Registered at the bottom with sharding.
+		"runtime/internal/wasitest": true, // Registered at the bottom as a host test.
+		"cmd/internal/testdir":      true, // Registered at the bottom with sharding.
 	}
 
 	// Fast path to avoid the ~1 second of `go list std cmd` when
@@ -786,6 +787,16 @@ func (t *tester) registerTests() {
 		t.registerCgoTests(cgoHeading)
 	}
 
+	if goos == "wasip1" {
+		t.registerTest("wasip1 host tests",
+			&goTest{
+				variant:   "host",
+				pkg:       "runtime/internal/wasitest",
+				timeout:   1 * time.Minute,
+				runOnHost: true,
+			})
+	}
+
 	if goos != "android" && !t.iOS() {
 		// Only start multiple test dir shards on builders,
 		// where they get distributed to multiple machines.
@@ -834,7 +845,7 @@ func (t *tester) addTest(name, heading string, fn func(*distTest) error) {
 	if !strings.Contains(name, ":") && heading != "Testing packages." {
 		panic("empty variant is reserved exclusively for registerStdTest")
 	} else if strings.HasSuffix(name, ":racebench") && heading != "Running benchmarks briefly." {
-		panic(":racebench variant is reserved exclusively for registerRaceBenchTest")
+		panic("racebench variant is reserved exclusively for registerRaceBenchTest")
 	}
 	if t.testNames == nil {
 		t.testNames = make(map[string]bool)
