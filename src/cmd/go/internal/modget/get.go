@@ -1147,6 +1147,7 @@ func (r *resolver) loadPackages(ctx context.Context, patterns []string, findPack
 		LoadTests:                *getT,
 		AssumeRootsImported:      true, // After 'go get foo', imports of foo should build.
 		SilencePackageErrors:     true, // May be fixed by subsequent upgrades or downgrades.
+		TrySwitchToolchain:       toolchain.TryVersion,
 	}
 
 	opts.AllowPackage = func(ctx context.Context, path string, m module.Version) error {
@@ -1777,6 +1778,10 @@ func (r *resolver) reportChanges(oldReqs, newReqs []module.Version) {
 			fmt.Fprintf(os.Stderr, "go: removed %s %s\n", c.path, c.old)
 		} else if gover.ModCompare(c.path, c.new, c.old) > 0 {
 			fmt.Fprintf(os.Stderr, "go: upgraded %s %s => %s\n", c.path, c.old, c.new)
+			if c.path == "go" && gover.Compare(c.old, gover.ExplicitIndirectVersion) < 0 && gover.Compare(c.new, gover.ExplicitIndirectVersion) >= 0 {
+				fmt.Fprintf(os.Stderr, "\tnote: expanded dependencies to upgrade to go %s or higher; run 'go mod tidy' to clean up\n", gover.ExplicitIndirectVersion)
+			}
+
 		} else {
 			fmt.Fprintf(os.Stderr, "go: downgraded %s %s => %s\n", c.path, c.old, c.new)
 		}
