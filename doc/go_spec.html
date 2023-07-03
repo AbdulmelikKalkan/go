@@ -1,6 +1,6 @@
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of May 25, 2023",
+	"Subtitle": "Version of June 14, 2023",
 	"Path": "/ref/spec"
 }-->
 
@@ -4340,24 +4340,46 @@ type parameter list    type arguments    after substitution
 </pre>
 
 <p>
-For a generic function, type arguments may be provided explicitly, or they
-may be partially or completely <a href="#Type_inference">inferred</a>.
-A generic function that is <i>not</i> <a href="#Calls">called</a> requires a
-type argument list for instantiation; if the list is partial, all
-remaining type arguments must be inferrable.
-A generic function that is called may provide a (possibly partial) type
-argument list, or may omit it entirely if the omitted type arguments are
-inferrable from the ordinary (non-type) function arguments.
+When using a generic function, type arguments may be provided explicitly,
+or they may be partially or completely <a href="#Type_inference">inferred</a>
+from the context in which the function is used.
+Provided that they can be inferred, type arguments may be omitted entirely if the function is:
+</p>
+
+<ul>
+<li>
+	<a href="#Calls">called</a> with ordinary arguments,
+</li>
+<li>
+	<a href="#Assignment_statements">assigned</a> to a variable with an explicitly declared type,
+</li>
+<li>
+	<a href="#Calls">passed as an argument</a> to another function, or
+</li>
+<li>
+	<a href="#Return_statements">returned as a result</a>.
+</li>
+</ul>
+
+<p>
+In all other cases, a (possibly partial) type argument list must be present.
+If a type argument list is absent or partial, all missing type arguments
+must be inferrable from the context in which the function is used.
 </p>
 
 <pre>
-func min[T ~int|~float64](x, y T) T { … }
+// sum returns the sum (concatenation, for strings) of its arguments.
+func sum[T ~int | ~float64 | ~string](x... T) T { … }
 
-f := min                   // illegal: min must be instantiated with type arguments when used without being called
-minInt := min[int]         // minInt has type func(x, y int) int
-a := minInt(2, 3)          // a has value 2 of type int
-b := min[float64](2.0, 3)  // b has value 2.0 of type float64
-c := min(b, -1)            // c has value -1.0 of type float64
+x := sum                       // illegal: sum must have a type argument (x is a variable without a declared type)
+intSum := sum[int]             // intSum has type func(x... int) int
+a := intSum(2, 3)              // a has value 5 of type int
+b := sum[float64](2.0, 3)      // b has value 5.0 of type float64
+c := sum(b, -1)                // c has value 4.0 of type float64
+
+type sumFunc func(x... string) string
+var f sumFunc = sum            // same as var f sumFunc = sum[string]
+f = sum                        // same as f = sum[string]
 </pre>
 
 <p>
@@ -4382,6 +4404,10 @@ For a generic type, all type arguments must always be provided explicitly.
 </p>
 
 <h3 id="Type_inference">Type inference</h3>
+
+<p>
+<em>NOTE: This section is not yet up-to-date for Go 1.21.</em>
+</p>
 
 <p>
 Missing function type arguments may be <i>inferred</i> by a series of steps, described below.
@@ -5584,21 +5610,6 @@ succeeds but the result value is implementation-dependent.
 
 <ol>
 <li>
-Converting a signed or unsigned integer value to a string type yields a
-string containing the UTF-8 representation of the integer. Values outside
-the range of valid Unicode code points are converted to <code>"\uFFFD"</code>.
-
-<pre>
-string('a')       // "a"
-string(-1)        // "\ufffd" == "\xef\xbf\xbd"
-string(0xf8)      // "\u00f8" == "ø" == "\xc3\xb8"
-
-type myString string
-myString(0x65e5)  // "\u65e5" == "日" == "\xe6\x97\xa5"
-</pre>
-</li>
-
-<li>
 Converting a slice of bytes to a string type yields
 a string whose successive bytes are the elements of the slice.
 
@@ -5663,6 +5674,31 @@ runes("白鵬翔")              // []rune{0x767d, 0x9d6c, 0x7fd4}
 []myRune("♫♬")              // []myRune{0x266b, 0x266c}
 []myRune(myString("🌐"))    // []myRune{0x1f310}
 </pre>
+</li>
+
+<li>
+Finally, for historical reasons, an integer value may be converted to a string type.
+This form of conversion yields a string containing the (possibly multi-byte) UTF-8
+representation of the Unicode code point with the given integer value.
+Values outside the range of valid Unicode code points are converted to <code>"\uFFFD"</code>.
+
+<pre>
+string('a')          // "a"
+string(65)           // "A"
+string('\xf8')       // "\u00f8" == "ø" == "\xc3\xb8"
+string(-1)           // "\ufffd" == "\xef\xbf\xbd"
+
+type myString string
+myString('\u65e5')   // "\u65e5" == "日" == "\xe6\x97\xa5"
+</pre>
+
+Note: This form of conversion may eventually be removed from the language.
+The <a href="/pkg/cmd/vet"><code>go vet</code></a> tool flags certain
+integer-to-string conversions as potential errors.
+Library functions such as
+<a href="/pkg/unicode/utf8#AppendRune"><code>utf8.AppendRune</code></a> or
+<a href="/pkg/unicode/utf8#EncodeRune"><code>utf8.EncodeRune</code></a>
+should be used instead.
 </li>
 </ol>
 
@@ -7563,7 +7599,7 @@ t := max("", "foo", "bar")  // t == "foo" (string kind)
 </pre>
 
 <p>
-For numeric arguments, <code>min</code> and <code>max</code> are
+For numeric arguments, assuming all NaNs are equal, <code>min</code> and <code>max</code> are
 commutative and associative:
 </p>
 
@@ -7999,6 +8035,9 @@ The declaration order of variables declared in multiple files is determined
 by the order in which the files are presented to the compiler: Variables
 declared in the first file are declared before any of the variables declared
 in the second file, and so on.
+To ensure reproducible initialization behavior, build systems are encouraged
+to present multiple files belonging to the same package in lexical file name
+order to a compiler.
 </p>
 
 <p>
@@ -8109,15 +8148,30 @@ in a program.
 </p>
 
 <p>
-A package with no imports is initialized by assigning initial values
-to all its package-level variables followed by calling all <code>init</code>
-functions in the order they appear in the source, possibly in multiple files,
-as presented to the compiler.
+The entire package is initialized by assigning initial values
+to all its package-level variables followed by calling
+all <code>init</code> functions in the order they appear
+in the source, possibly in multiple files, as presented
+to the compiler.
+</p>
+
+<h3 id="Program_initialization">Program initialization</h3>
+
+<p>
+The packages of a complete program are initialized stepwise, one package at a time.
 If a package has imports, the imported packages are initialized
 before initializing the package itself. If multiple packages import
 a package, the imported package will be initialized only once.
 The importing of packages, by construction, guarantees that there
 can be no cyclic initialization dependencies.
+More precisely:
+</p>
+
+<p>
+Given the list of all packages, sorted by import path, in each step the first
+uninitialized package in the list for which all imported packages (if any) are
+already initialized is <a href="#Package_initialization">initialized</a>.
+This step is repeated until all packages are initialized.
 </p>
 
 <p>
@@ -8130,13 +8184,6 @@ always sequences
 the <code>init</code> functions: it will not invoke the next one
 until the previous one has returned.
 </p>
-
-<p>
-To ensure reproducible initialization behavior, build systems are encouraged
-to present multiple files belonging to the same package in lexical file name
-order to a compiler.
-</p>
-
 
 <h3 id="Program_execution">Program execution</h3>
 <p>
@@ -8153,8 +8200,8 @@ func main() { … }
 </pre>
 
 <p>
-Program execution begins by initializing the main package and then
-invoking the function <code>main</code>.
+Program execution begins by <a href="#Program_initialization">initializing the program</a>
+and then invoking the function <code>main</code> in package <code>main</code>.
 When that function invocation returns, the program exits.
 It does not wait for other (non-<code>main</code>) goroutines to complete.
 </p>

@@ -72,6 +72,14 @@ To remove a dependency on a module and downgrade modules that require it:
 
 	go get example.com/mod@none
 
+To upgrade the minimum required Go version to the latest released Go version:
+
+	go get go@latest
+
+To upgrade the Go toolchain to the latest patch release of the current Go toolchain:
+
+	go get toolchain@patch
+
 See https://golang.org/ref/mod#go-get for details.
 
 In earlier versions of Go, 'go get' was used to build and install packages.
@@ -105,6 +113,9 @@ debugging version control commands when a module is downloaded directly
 from a repository.
 
 For more about modules, see https://golang.org/ref/mod.
+
+For more about using 'go get' to update the minimum Go version and
+suggested Go toolchain, see https://go.dev/doc/toolchain.
 
 For more about specifying packages, see 'go help packages'.
 
@@ -333,7 +344,7 @@ func runGet(ctx context.Context, cmd *base.Command, args []string) {
 			// The result of any version query for a given module — even "upgrade" or
 			// "patch" — is always relative to the build list at the start of
 			// the 'go get' command, not an intermediate state, and is therefore
-			// dederministic and therefore cachable, and the constraints on the
+			// deterministic and therefore cachable, and the constraints on the
 			// selected version of each module can only narrow as we iterate.
 			//
 			// "all" is functionally very similar to a wildcard pattern. The set of
@@ -348,7 +359,7 @@ func runGet(ctx context.Context, cmd *base.Command, args []string) {
 
 		// When we load imports, we detect the following conditions:
 		//
-		// - missing transitive depencies that need to be resolved from outside the
+		// - missing transitive dependencies that need to be resolved from outside the
 		//   current build list (note that these may add new matches for existing
 		//   pattern queries!)
 		//

@@ -145,9 +145,9 @@ In addition to the build flags, the flags handled by 'go test' itself are:
 	    the package list (if present) must appear before this flag.
 
 	-c
-	    Compile the test binary to pkg.test but do not run it
+	    Compile the test binary to pkg.test in the current directory but do not run it
 	    (where pkg is the last element of the package's import path).
-	    The file name can be changed with the -o flag.
+	    The file name or target directory can be changed with the -o flag.
 
 	-exec xprog
 	    Run the test binary using xprog. The behavior is the same as
@@ -160,6 +160,8 @@ In addition to the build flags, the flags handled by 'go test' itself are:
 	-o file
 	    Compile the test binary to the named file.
 	    The test still runs (unless -c or -i is specified).
+	    If file ends in a slash or names an existing directory,
+	    the test is written to pkg.test in that directory.
 
 The test binary also accepts flags that control execution of the test; these
 flags are also accessible by 'go test'. See 'go help testflag' for details.
@@ -658,6 +660,7 @@ var defaultVetFlags = []string{
 	"-printf",
 	// "-rangeloops",
 	// "-shift",
+	"-slog",
 	"-stringintconv",
 	// "-structtags",
 	// "-tests",
@@ -1215,7 +1218,15 @@ func (lockedStdout) Write(b []byte) (int, error) {
 
 func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action) error {
 	// Wait for previous test to get started and print its first json line.
-	<-r.prev
+	select {
+	case <-r.prev:
+	case <-base.Interrupted:
+		// We can't wait for the previous test action to complete: we don't start
+		// new actions after an interrupt, so if that action wasn't already running
+		// it might never happen. Instead, just don't log anything for this action.
+		base.SetExitStatus(1)
+		return nil
+	}
 
 	if a.Failed {
 		// We were unable to build the binary.

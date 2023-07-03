@@ -1995,6 +1995,10 @@ func (p *Package) load(ctx context.Context, opts PackageOpts, path string, stk *
 		setError(fmt.Errorf("invalid input directory name %q", name))
 		return
 	}
+	if strings.ContainsAny(p.Dir, "\r\n") {
+		setError(fmt.Errorf("invalid package directory %q", p.Dir))
+		return
+	}
 
 	// Build list of imported packages and full dependency list.
 	imports := make([]*Package, 0, len(p.Imports))
@@ -2936,7 +2940,7 @@ func setPGOProfilePath(pkgs []*Package) {
 		// Locate PGO profiles from the main packages, and
 		// attach the profile to the main package and its
 		// dependencies.
-		// If we're builing multiple main packages, they may
+		// If we're building multiple main packages, they may
 		// have different profiles. We may need to split (unshare)
 		// the dependency graph so they can attach different
 		// profiles.

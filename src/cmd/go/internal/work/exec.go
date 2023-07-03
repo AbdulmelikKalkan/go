@@ -514,6 +514,12 @@ func (b *Builder) build(ctx context.Context, a *Action) (err error) {
 		b.Print(p.ImportPath + "\n")
 	}
 
+	if p.Error != nil {
+		// Don't try to build anything for packages with errors. There may be a
+		// problem with the inputs that makes the package unsafe to build.
+		return p.Error
+	}
+
 	if p.BinaryOnly {
 		p.Stale = true
 		p.StaleReason = "binary-only packages are no longer supported"
@@ -3880,7 +3886,7 @@ func useResponseFile(path string, argLen int) bool {
 	// TODO: Note that other toolchains like CC are missing here for now.
 	prog := strings.TrimSuffix(filepath.Base(path), ".exe")
 	switch prog {
-	case "compile", "link", "cgo", "asm":
+	case "compile", "link", "cgo", "asm", "cover":
 	default:
 		return false
 	}

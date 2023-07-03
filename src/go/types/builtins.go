@@ -577,6 +577,11 @@ func (check *Checker) builtin(x *operand, call *ast.CallExpr, id builtinId) (_ b
 			x.mode = value
 		}
 
+		// Use the final type computed above for all arguments.
+		for _, a := range args {
+			check.updateExprType(a.expr, x.typ, true)
+		}
+
 		if check.recordTypes() && x.mode != constant_ {
 			types := make([]Type, nargs)
 			for i := range types {
@@ -891,6 +896,9 @@ func (check *Checker) builtin(x *operand, call *ast.CallExpr, id builtinId) (_ b
 			check.rawExpr(nil, x1, arg, nil, false) // permit trace for types, e.g.: new(trace(T))
 			check.dump("%v: %s", x1.Pos(), x1)
 			x1 = &t // use incoming x only for first argument
+		}
+		if x.mode == invalid {
+			return
 		}
 		// trace is only available in test mode - no need to record signature
 
