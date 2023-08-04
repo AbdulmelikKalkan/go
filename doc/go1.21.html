@@ -74,13 +74,13 @@ Do not send CLs removing the interior tags from such phrases.
     </li>
     <li>Repeat until the list of packages is empty:
       <ul>
-	<li>
-	  Find the first package in the list for which all imports are
-	  already initialized.
-	</li>
-	<li>
-	  Initialize that package and remove it from the list.
-	</li>
+        <li>
+          Find the first package in the list for which all imports are
+          already initialized.
+        </li>
+        <li>
+          Initialize that package and remove it from the list.
+        </li>
       </ul>
     </li>
   </ul>
@@ -484,6 +484,7 @@ Do not send CLs removing the interior tags from such phrases.
       <a href="/pkg/context/#Context"><code>Context</code></a> values
       for equality has never been well-defined, so this is not
       considered to be an incompatible change.
+    </p>
   </dd>
 </dl>
 
@@ -581,8 +582,34 @@ Do not send CLs removing the interior tags from such phrases.
     </p>
 
     <p><!-- https://go.dev/issue/46308, CL 497377 -->
-      The new <a href="/pkg/crypto/tls/#VersionName"></code>VersionName</code></a> function
+      The new <a href="/pkg/crypto/tls/#VersionName"><code>VersionName</code></a> function
       returns the name for a TLS version number.
+    </p>
+
+    <p><!-- https://go.dev/issue/52113, CL 410496 -->
+      The TLS alert codes sent from the server for client authentication failures have
+      been improved. Prior to Go 1.21, these failures always resulted in a "bad certificate" alert.
+      Starting from Go 1.21, certain failures will result in more appropriate alert codes,
+      as defined by RFC 5246 and RFC 8446:
+      <ul>
+        <li>
+          For TLS 1.3 connections, if the server is configured to require client authentication using
+          <a href="/pkg/crypto/tls/#RequireAnyClientCert"></code>RequireAnyClientCert</code></a> or
+          <a href="/pkg/crypto/tls/#RequireAndVerifyClientCert"></code>RequireAndVerifyClientCert</code></a>,
+          and the client does not provide any certificate, the server will now return the "certificate required" alert.
+        </li>
+        <li>
+          If the client provides a certificate that is not signed by the set of trusted certificate authorities
+          configured on the server, the server will return the "unknown certificate authority" alert.
+        </li>
+        <li>
+          If the client provides a certificate that is either expired or not yet valid,
+          the server will return the "expired certificate" alert.
+        </li>
+        <li>
+          In all other scenarios related to client authentication failures, the server still returns "bad certificate".
+        </li>
+      </ul>
     </p>
   </dd>
 </dl><!-- crypto/tls -->
@@ -1037,6 +1064,8 @@ Do not send CLs removing the interior tags from such phrases.
       is no longer available as a <a href="/pkg/runtime#hdr-Environment_Variables">debug option</a>.
       Instead, it is available as an experiment using <code>GOEXPERIMENT=cgocheck2</code>.
       In particular this means that this mode has to be selected at build time instead of startup time.
+    </p>
+
     <p>
       <code>GODEBUG=cgocheck=1</code> is still available (and is still the default).
     </p>
@@ -1128,13 +1157,13 @@ Do not send CLs removing the interior tags from such phrases.
       such that <code>errors.Is(err, errors.ErrUnsupported)</code>
       returns true.
       <ul>
-	<li><code>ENOSYS</code></li>
-	<li><code>ENOTSUP</code></li>
-	<li><code>EOPNOTSUPP</code></li>
-	<li><code>EPLAN9</code> (Plan 9 only)</li>
-	<li><code>ERROR_CALL_NOT_IMPLEMENTED</code> (Windows only)</li>
-	<li><code>ERROR_NOT_SUPPORTED</code> (Windows only)</li>
-	<li><code>EWINDOWS</code> (Windows only)</li>
+        <li><code>ENOSYS</code></li>
+        <li><code>ENOTSUP</code></li>
+        <li><code>EOPNOTSUPP</code></li>
+        <li><code>EPLAN9</code> (Plan 9 only)</li>
+        <li><code>ERROR_CALL_NOT_IMPLEMENTED</code> (Windows only)</li>
+        <li><code>ERROR_NOT_SUPPORTED</code> (Windows only)</li>
+        <li><code>EWINDOWS</code> (Windows only)</li>
       </ul>
     </p>
   </dd>
@@ -1171,6 +1200,7 @@ Do not send CLs removing the interior tags from such phrases.
       associated support throughout the system has been upgraded to
       <a href="https://www.unicode.org/versions/Unicode15.0.0/">Unicode 15.0.0</a>.
     </p>
+  </dd>
 </dl><!-- unicode -->
 
 <h2 id="ports">Ports</h2>
