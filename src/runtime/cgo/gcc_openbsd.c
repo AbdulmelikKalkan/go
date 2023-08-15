@@ -1,6 +1,8 @@
-// Copyright 2018 The Go Authors. All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+
+//go:build openbsd && (386 || arm || amd64 || arm64 || riscv64)
 
 #include <sys/types.h>
 #include <pthread.h>
@@ -41,13 +43,11 @@ _cgo_sys_thread_start(ThreadStart *ts)
 	pthread_sigmask(SIG_SETMASK, &oset, nil);
 
 	if (err != 0) {
-		fprintf(stderr, "runtime/cgo: pthread_create failed: %s\n", strerror(err));
-		abort();
+		fatalf("pthread_create failed: %s", strerror(err));
 	}
 }
 
-extern void crosscall_arm1(void (*fn)(void), void (*setg_gcc)(void*), void *g);
-
+extern void crosscall1(void (*fn)(void), void (*setg_gcc)(void*), void *g);
 static void*
 threadentry(void *v)
 {
@@ -56,6 +56,6 @@ threadentry(void *v)
 	ts = *(ThreadStart*)v;
 	free(v);
 
-	crosscall_arm1(ts.fn, setg_gcc, (void*)ts.g);
+	crosscall1(ts.fn, setg_gcc, ts.g);
 	return nil;
 }

@@ -2,23 +2,30 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-#include <sys/types.h>
+//go:build linux && (386 || arm || loong64 || mips || mipsle || mips64 || mips64le || riscv64)
+
 #include <pthread.h>
-#include <signal.h>
 #include <string.h>
+#include <signal.h>
 #include "libcgo.h"
 #include "libcgo_unix.h"
 
-static void* threadentry(void*);
+static void *threadentry(void*);
+
+void (*x_cgo_inittls)(void **tlsg, void **tlsbase) __attribute__((common));
 static void (*setg_gcc)(void*);
 
 void
-x_cgo_init(G *g, void (*setg)(void*))
+x_cgo_init(G *g, void (*setg)(void*), void **tlsg, void **tlsbase)
 {
 	setg_gcc = setg;
-	_cgo_set_stacklo(g, NULL);
-}
 
+	_cgo_set_stacklo(g, NULL);
+
+	if (x_cgo_inittls) {
+		x_cgo_inittls(tlsg, tlsbase);
+	}
+}
 
 void
 _cgo_sys_thread_start(ThreadStart *ts)
@@ -41,8 +48,7 @@ _cgo_sys_thread_start(ThreadStart *ts)
 	pthread_sigmask(SIG_SETMASK, &oset, nil);
 
 	if (err != 0) {
-		fprintf(stderr, "runtime/cgo: pthread_create failed: %s\n", strerror(err));
-		abort();
+		fatalf("pthread_create failed: %s", strerror(err));
 	}
 }
 
@@ -51,21 +57,9 @@ static void*
 threadentry(void *v)
 {
 	ThreadStart ts;
-	stack_t ss;
 
 	ts = *(ThreadStart*)v;
 	free(v);
-
-	// On NetBSD, a new thread inherits the signal stack of the
-	// creating thread. That confuses minit, so we remove that
-	// signal stack here before calling the regular mstart. It's
-	// a bit baroque to remove a signal stack here only to add one
-	// in minit, but it's a simple change that keeps NetBSD
-	// working like other OS's. At this point all signals are
-	// blocked, so there is no race.
-	memset(&ss, 0, sizeof ss);
-	ss.ss_flags = SS_DISABLE;
-	sigaltstack(&ss, nil);
 
 	crosscall1(ts.fn, setg_gcc, ts.g);
 	return nil;
