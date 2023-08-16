@@ -427,13 +427,6 @@ func (u *unifier) nify(x, y Type, mode unifyMode, p *ifacePair) (result bool) {
 	// x != y if we get here
 	assert(x != y)
 
-	// Type elements (array, slice, etc. elements) use emode for unification.
-	// Element types must match exactly if the types are used in an assignment.
-	emode := mode
-	if mode&assign != 0 {
-		emode |= exact
-	}
-
 	// If we don't require exact unification and both types are interfaces,
 	// one interface must have a subset of the methods of the other and
 	// corresponding method signatures must unify.
@@ -502,7 +495,7 @@ func (u *unifier) nify(x, y Type, mode unifyMode, p *ifacePair) (result bool) {
 			}
 			// All xmethods must exist in ymethods and corresponding signatures must unify.
 			for _, xm := range xmethods {
-				if ym := ymap[xm.Id()]; ym == nil || !u.nify(xm.typ, ym.typ, emode, p) {
+				if ym := ymap[xm.Id()]; ym == nil || !u.nify(xm.typ, ym.typ, exact, p) {
 					return false
 				}
 			}
@@ -523,7 +516,7 @@ func (u *unifier) nify(x, y Type, mode unifyMode, p *ifacePair) (result bool) {
 			xmethods := xi.typeSet().methods
 			for _, xm := range xmethods {
 				obj, _, _ := LookupFieldOrMethod(y, false, xm.pkg, xm.name)
-				if ym, _ := obj.(*Func); ym == nil || !u.nify(xm.typ, ym.typ, emode, p) {
+				if ym, _ := obj.(*Func); ym == nil || !u.nify(xm.typ, ym.typ, exact, p) {
 					return false
 				}
 			}
@@ -547,6 +540,13 @@ func (u *unifier) nify(x, y Type, mode unifyMode, p *ifacePair) (result bool) {
 			u.tracef("%s ≡ %s\t// swap", y, x)
 		}
 		x, y = y, x
+	}
+
+	// Type elements (array, slice, etc. elements) use emode for unification.
+	// Element types must match exactly if the types are used in an assignment.
+	emode := mode
+	if mode&assign != 0 {
+		emode |= exact
 	}
 
 	switch x := x.(type) {
@@ -682,7 +682,7 @@ func (u *unifier) nify(x, y Type, mode unifyMode, p *ifacePair) (result bool) {
 				}
 				for i, f := range a {
 					g := b[i]
-					if f.Id() != g.Id() || !u.nify(f.typ, g.typ, emode, q) {
+					if f.Id() != g.Id() || !u.nify(f.typ, g.typ, exact, q) {
 						return false
 					}
 				}
