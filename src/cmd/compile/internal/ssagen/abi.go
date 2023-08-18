@@ -324,11 +324,8 @@ func makeABIWrapper(f *ir.Func, wrapperABI obj.ABI) {
 
 	typecheck.FinishFuncBody()
 
-	typecheck.Func(fn)
 	ir.CurFunc = fn
 	typecheck.Stmts(fn.Body)
-
-	typecheck.Target.Funcs = append(typecheck.Target.Funcs, fn)
 
 	// Restore previous context.
 	base.Pos = savepos

@@ -9,7 +9,6 @@ import (
 	"cmd/compile/internal/ir"
 	"cmd/compile/internal/types"
 	"cmd/internal/obj"
-	"cmd/internal/src"
 )
 
 func LookupRuntime(name string) *ir.Name {
@@ -30,9 +29,8 @@ func SubstArgTypes(old *ir.Name, types_ ...*types.Type) *ir.Name {
 	for _, t := range types_ {
 		types.CalcSize(t)
 	}
-	n := ir.NewNameAt(old.Pos(), old.Sym())
+	n := ir.NewNameAt(old.Pos(), old.Sym(), types.SubstAny(old.Type(), &types_))
 	n.Class = old.Class
-	n.SetType(types.SubstAny(old.Type(), &types_))
 	n.Func = old.Func
 	if len(types_) > 0 {
 		base.Fatalf("SubstArgTypes: too many argument types")
@@ -75,9 +73,9 @@ func InitRuntime() {
 		typ := typs[d.typ]
 		switch d.tag {
 		case funcTag:
-			importfunc(src.NoXPos, sym, typ)
+			importfunc(sym, typ)
 		case varTag:
-			importvar(src.NoXPos, sym, typ)
+			importvar(sym, typ)
 		default:
 			base.Fatalf("unhandled declaration tag %v", d.tag)
 		}
@@ -111,9 +109,9 @@ func InitCoverage() {
 		typ := typs[d.typ]
 		switch d.tag {
 		case funcTag:
-			importfunc(src.NoXPos, sym, typ)
+			importfunc(sym, typ)
 		case varTag:
-			importvar(src.NoXPos, sym, typ)
+			importvar(sym, typ)
 		default:
 			base.Fatalf("unhandled declaration tag %v", d.tag)
 		}

@@ -39,8 +39,7 @@ func MakeInit() {
 	fn.SetIsPackageInit(true)
 
 	// Outline (if legal/profitable) global map inits.
-	newfuncs := []*ir.Func{}
-	nf, newfuncs = staticinit.OutlineMapInits(nf)
+	nf, newfuncs := staticinit.OutlineMapInits(nf)
 
 	// Suppress useless "can inline" diagnostics.
 	// Init functions are only called dynamically.
@@ -52,20 +51,12 @@ func MakeInit() {
 	fn.Body = nf
 	typecheck.FinishFuncBody()
 
-	typecheck.Func(fn)
 	ir.WithFunc(fn, func() {
 		typecheck.Stmts(nf)
 	})
-	typecheck.Target.Funcs = append(typecheck.Target.Funcs, fn)
 	if base.Debug.WrapGlobalMapDbg > 1 {
 		fmt.Fprintf(os.Stderr, "=-= len(newfuncs) is %d for %v\n",
 			len(newfuncs), fn)
-	}
-	for _, nfn := range newfuncs {
-		if base.Debug.WrapGlobalMapDbg > 1 {
-			fmt.Fprintf(os.Stderr, "=-= add to target.decls %v\n", nfn)
-		}
-		typecheck.Target.Funcs = append(typecheck.Target.Funcs, nfn)
 	}
 
 	// Prepend to Inits, so it runs first, before any user-declared init
@@ -132,25 +123,17 @@ func MakeTask() {
 
 			// Call runtime.asanregisterglobals function to poison redzones.
 			// runtime.asanregisterglobals(unsafe.Pointer(&globals[0]), ni)
-			asanf := typecheck.NewName(ir.Pkgs.Runtime.Lookup("asanregisterglobals"))
-			ir.MarkFunc(asanf)
-			asanf.SetType(types.NewSignature(nil, []*types.Field{
-				types.NewField(base.Pos, nil, types.Types[types.TUNSAFEPTR]),
-				types.NewField(base.Pos, nil, types.Types[types.TUINTPTR]),
-			}, nil))
-			asancall := ir.NewCallExpr(base.Pos, ir.OCALL, asanf, nil)
+			asancall := ir.NewCallExpr(base.Pos, ir.OCALL, typecheck.LookupRuntime("asanregisterglobals"), nil)
 			asancall.Args.Append(typecheck.ConvNop(typecheck.NodAddr(
 				ir.NewIndexExpr(base.Pos, globals, ir.NewInt(base.Pos, 0))), types.Types[types.TUNSAFEPTR]))
 			asancall.Args.Append(typecheck.DefaultLit(ir.NewInt(base.Pos, int64(ni)), types.Types[types.TUINTPTR]))
 
 			fnInit.Body.Append(asancall)
 			typecheck.FinishFuncBody()
-			typecheck.Func(fnInit)
 			ir.CurFunc = fnInit
 			typecheck.Stmts(fnInit.Body)
 			ir.CurFunc = nil
 
-			typecheck.Target.Funcs = append(typecheck.Target.Funcs, fnInit)
 			typecheck.Target.Inits = append(typecheck.Target.Inits, fnInit)
 		}
 	}
@@ -193,8 +176,7 @@ func MakeTask() {
 
 	// Make an .inittask structure.
 	sym := typecheck.Lookup(".inittask")
-	task := typecheck.NewName(sym)
-	task.SetType(types.Types[types.TUINT8]) // fake type
+	task := ir.NewNameAt(base.Pos, sym, types.Types[types.TUINT8]) // fake type
 	task.Class = ir.PEXTERN
 	sym.Def = task
 	lsym := task.Linksym()

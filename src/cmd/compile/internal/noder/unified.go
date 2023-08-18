@@ -83,8 +83,6 @@ func unified(m posMap, noders []*noder) {
 
 	target := typecheck.Target
 
-	typecheck.TypecheckAllowed = true
-
 	localPkgReader = newPkgReader(pkgbits.NewPkgDecoder(types.LocalPkg.Path, data))
 	readPackage(localPkgReader, types.LocalPkg, true)
 
@@ -319,7 +317,7 @@ func readPackage(pr *pkgReader, importpkg *types.Pkg, localStub bool) {
 
 		if r.Bool() {
 			sym := importpkg.Lookup(".inittask")
-			task := ir.NewNameAt(src.NoXPos, sym)
+			task := ir.NewNameAt(src.NoXPos, sym, nil)
 			task.Class = ir.PEXTERN
 			sym.Def = task
 		}

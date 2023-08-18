@@ -31,7 +31,7 @@ func (e *escape) stmt(n ir.Node) {
 	default:
 		base.Fatalf("unexpected stmt: %v", n)
 
-	case ir.ODCLCONST, ir.ODCLTYPE, ir.OFALL, ir.OINLMARK:
+	case ir.OFALL, ir.OINLMARK:
 		// nop
 
 	case ir.OBREAK, ir.OCONTINUE, ir.OGOTO:
@@ -92,8 +92,9 @@ func (e *escape) stmt(n ir.Node) {
 		n := n.(*ir.RangeStmt)
 		base.Assert(!n.DistinctVars) // Should all be rewritten before escape analysis
 
-		// X is evaluated outside the loop.
-		tmp := e.newLoc(nil, false)
+		// X is evaluated outside the loop and persists until the loop
+		// terminates.
+		tmp := e.newLoc(nil, true)
 		e.expr(tmp.asHole(), n.X)
 
 		e.loopDepth++

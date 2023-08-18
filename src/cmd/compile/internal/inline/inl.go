@@ -647,10 +647,7 @@ func (v *hairyVisitor) doNode(n ir.Node) bool {
 		// should try to account for that if we're going to account for captures.
 		v.budget -= 15
 
-	case ir.OGO,
-		ir.ODEFER,
-		ir.ODCLTYPE, // can't print yet
-		ir.OTAILCALL:
+	case ir.OGO, ir.ODEFER, ir.OTAILCALL:
 		v.reason = "unhandled op " + n.Op().String()
 		return true
 
@@ -682,7 +679,7 @@ func (v *hairyVisitor) doNode(n ir.Node) bool {
 		// This doesn't produce code, but the children might.
 		v.budget++ // undo default cost
 
-	case ir.ODCLCONST, ir.OFALL, ir.OTYPE:
+	case ir.OFALL, ir.OTYPE:
 		// These nodes don't produce code; omit from inlining budget.
 		return false
 
@@ -821,11 +818,9 @@ func inlcopy(n ir.Node) ir.Node {
 			// x.Func.Nname.Ntype, x.Func.Dcl, x.Func.ClosureVars, and
 			// x.Func.Body for iexport and local inlining.
 			oldfn := x.Func
-			newfn := ir.NewFunc(oldfn.Pos())
+			newfn := ir.NewFunc(oldfn.Pos(), oldfn.Nname.Pos(), oldfn.Nname.Sym(), oldfn.Nname.Type())
 			m.(*ir.ClosureExpr).Func = newfn
-			newfn.Nname = ir.NewNameAt(oldfn.Nname.Pos(), oldfn.Nname.Sym())
 			// XXX OK to share fn.Type() ??
-			newfn.Nname.SetType(oldfn.Nname.Type())
 			newfn.Body = inlcopylist(oldfn.Body)
 			// Make shallow copy of the Dcl and ClosureVar slices
 			newfn.Dcl = append([]*ir.Name(nil), oldfn.Dcl...)

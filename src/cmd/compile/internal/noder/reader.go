@@ -750,11 +750,22 @@ func (pr *pkgReader) objIdx(idx pkgbits.Index, implicits, explicits []*types.Typ
 		if sym.Name == "init" {
 			sym = Renameinit()
 		}
-		name := do(ir.ONAME, true)
-		setType(name, r.signature(nil))
 
-		name.Func = ir.NewFunc(r.pos())
-		name.Func.Nname = name
+		npos := r.pos()
+		setBasePos(npos)
+		r.typeParamNames()
+		typ := r.signature(nil)
+		fpos := r.pos()
+
+		fn := ir.NewFunc(fpos, npos, sym, typ)
+		name := fn.Nname
+		if !sym.IsBlank() {
+			if sym.Def != nil {
+				base.FatalfAt(name.Pos(), "already have a definition for %v", name)
+			}
+			assert(sym.Def == nil)
+			sym.Def = name
+		}
 
 		if r.hasTypeParams() {
 			name.Func.SetDupok(true)
@@ -989,17 +1000,15 @@ func (r *reader) typeParamNames() {
 
 func (r *reader) method(rext *reader) *types.Field {
 	r.Sync(pkgbits.SyncMethod)
-	pos := r.pos()
+	npos := r.pos()
 	_, sym := r.selector()
 	r.typeParamNames()
 	_, recv := r.param()
 	typ := r.signature(recv)
 
-	name := ir.NewNameAt(pos, ir.MethodSym(recv.Type, sym))
-	setType(name, typ)
-
-	name.Func = ir.NewFunc(r.pos())
-	name.Func.Nname = name
+	fpos := r.pos()
+	fn := ir.NewFunc(fpos, npos, ir.MethodSym(recv.Type, sym), typ)
+	name := fn.Nname
 
 	if r.hasTypeParams() {
 		name.Func.SetDupok(true)
@@ -1061,9 +1070,6 @@ func (dict *readerDict) hasTypeParams() bool {
 func (r *reader) funcExt(name *ir.Name, method *types.Sym) {
 	r.Sync(pkgbits.SyncFuncExt)
 
-	name.Class = 0 // so MarkFunc doesn't complain
-	ir.MarkFunc(name)
-
 	fn := name.Func
 
 	// XXX: Workaround because linker doesn't know how to copy Pos.
@@ -1096,8 +1102,6 @@ func (r *reader) funcExt(name *ir.Name, method *types.Sym) {
 			}
 		}
 	}
-
-	typecheck.Func(fn)
 
 	if r.Bool() {
 		assert(name.Defn == nil)
@@ -1386,7 +1390,7 @@ func (pr *pkgReader) dictNameOf(dict *readerDict) *ir.Name {
 		return sym.Def.(*ir.Name)
 	}
 
-	name := ir.NewNameAt(pos, sym)
+	name := ir.NewNameAt(pos, sym, dict.varType())
 	name.Class = ir.PEXTERN
 	sym.Def = name // break cycles with mutual subdictionaries
 
@@ -1452,9 +1456,6 @@ func (pr *pkgReader) dictNameOf(dict *readerDict) *ir.Name {
 	}
 
 	objw.Global(lsym, int32(ot), obj.DUPOK|obj.RODATA)
-
-	name.SetType(dict.varType())
-	name.SetTypecheck(1)
 
 	return name
 }
@@ -1530,9 +1531,7 @@ func (r *reader) funcarg(param *types.Field, sym *types.Sym, ctxt ir.Class) {
 		return
 	}
 
-	name := ir.NewNameAt(r.inlPos(param.Pos), sym)
-	setType(name, param.Type)
-	r.addLocal(name, ctxt)
+	name := r.addLocal(r.inlPos(param.Pos), sym, ctxt, param.Type)
 
 	if r.inlCall == nil {
 		if !r.funarghack {
@@ -1548,8 +1547,10 @@ func (r *reader) funcarg(param *types.Field, sym *types.Sym, ctxt ir.Class) {
 	}
 }
 
-func (r *reader) addLocal(name *ir.Name, ctxt ir.Class) {
+func (r *reader) addLocal(pos src.XPos, sym *types.Sym, ctxt ir.Class, typ *types.Type) *ir.Name {
 	assert(ctxt == ir.PAUTO || ctxt == ir.PPARAM || ctxt == ir.PPARAMOUT)
+
+	name := ir.NewNameAt(pos, sym, typ)
 
 	if name.Sym().Name == dictParamName {
 		r.dictParam = name
@@ -1572,7 +1573,7 @@ func (r *reader) addLocal(name *ir.Name, ctxt ir.Class) {
 
 	// TODO(mdempsky): Move earlier.
 	if ir.IsBlank(name) {
-		return
+		return name
 	}
 
 	if r.inlCall != nil {
@@ -1592,6 +1593,8 @@ func (r *reader) addLocal(name *ir.Name, ctxt ir.Class) {
 	if ctxt == ir.PAUTO {
 		name.SetFrameOffset(0)
 	}
+
+	return name
 }
 
 func (r *reader) useLocal() *ir.Name {
@@ -1836,9 +1839,7 @@ func (r *reader) assign() (ir.Node, bool) {
 		_, sym := r.localIdent()
 		typ := r.typ()
 
-		name := ir.NewNameAt(pos, sym)
-		setType(name, typ)
-		r.addLocal(name, ir.PAUTO)
+		name := r.addLocal(pos, sym, ir.PAUTO, typ)
 		return name, true
 
 	case assignExpr:
@@ -2064,9 +2065,7 @@ func (r *reader) switchStmt(label *types.Sym) ir.Node {
 			pos := r.pos()
 			typ := r.typ()
 
-			name := ir.NewNameAt(pos, ident.Sym())
-			setType(name, typ)
-			r.addLocal(name, ir.PAUTO)
+			name := r.addLocal(pos, ident.Sym(), ir.PAUTO, typ)
 			clause.Var = name
 			name.Defn = tag
 		}
@@ -2723,20 +2722,11 @@ func (r *reader) syntheticClosure(origPos src.XPos, typ *types.Type, ifaceHack b
 		return false
 	}
 
-	// The ODCLFUNC and its body need to use the original position, but
-	// the OCLOSURE node and any Init statements should use the inlined
-	// position instead. See also the explanation in reader.funcLit.
-	inlPos := r.inlPos(origPos)
-
-	fn := ir.NewClosureFunc(origPos, r.curfn != nil)
+	fn := r.inlClosureFunc(origPos, typ)
 	fn.SetWrapper(true)
-	clo := fn.OClosure
-	clo.SetPos(inlPos)
-	ir.NameClosure(clo, r.curfn)
 
-	setType(fn.Nname, typ)
-	typecheck.Func(fn)
-	setType(clo, fn.Type())
+	clo := fn.OClosure
+	inlPos := clo.Pos()
 
 	var init ir.Nodes
 	for i, n := range captures {
@@ -2773,8 +2763,7 @@ func (r *reader) syntheticClosure(origPos src.XPos, typ *types.Type, ifaceHack b
 	bodyReader[fn] = pri
 	pri.funcBody(fn)
 
-	// TODO(mdempsky): Remove hard-coding of typecheck.Target.
-	return ir.InitExpr(init, ir.UseClosure(clo, typecheck.Target))
+	return ir.InitExpr(init, clo)
 }
 
 // syntheticSig duplicates and returns the params and results lists
@@ -3122,21 +3111,16 @@ func (r *reader) funcLit() ir.Node {
 	// OCLOSURE node, because that position represents where any heap
 	// allocation of the closure is credited (#49171).
 	r.suppressInlPos++
-	pos := r.pos()
-	xtype2 := r.signature(nil)
+	origPos := r.pos()
+	sig := r.signature(nil)
 	r.suppressInlPos--
 
-	fn := ir.NewClosureFunc(pos, r.curfn != nil)
-	clo := fn.OClosure
-	clo.SetPos(r.inlPos(pos)) // see comment above
-	ir.NameClosure(clo, r.curfn)
-
-	setType(fn.Nname, xtype2)
-	typecheck.Func(fn)
-	setType(clo, fn.Type())
+	fn := r.inlClosureFunc(origPos, sig)
 
 	fn.ClosureVars = make([]*ir.Name, 0, r.Len())
 	for len(fn.ClosureVars) < cap(fn.ClosureVars) {
+		// TODO(mdempsky): I think these should be original positions too
+		// (i.e., not inline-adjusted).
 		ir.NewClosureVar(r.pos(), fn, r.useLocal())
 	}
 	if param := r.dictParam; param != nil {
@@ -3147,8 +3131,19 @@ func (r *reader) funcLit() ir.Node {
 
 	r.addBody(fn, nil)
 
+	return fn.OClosure
+}
+
+// inlClosureFunc constructs a new closure function, but correctly
+// handles inlining.
+func (r *reader) inlClosureFunc(origPos src.XPos, sig *types.Type) *ir.Func {
+	curfn := r.inlCaller
+	if curfn == nil {
+		curfn = r.curfn
+	}
+
 	// TODO(mdempsky): Remove hard-coding of typecheck.Target.
-	return ir.UseClosure(clo, typecheck.Target)
+	return ir.NewClosureFunc(origPos, r.inlPos(origPos), ir.OCLOSURE, sig, curfn, typecheck.Target)
 }
 
 func (r *reader) exprList() []ir.Node {
@@ -3466,13 +3461,8 @@ func unifiedInlineCall(call *ir.CallExpr, fn *ir.Func, inlIndex int) *ir.Inlined
 
 	r := pri.asReader(pkgbits.RelocBody, pkgbits.SyncFuncBody)
 
-	// TODO(mdempsky): This still feels clumsy. Can we do better?
-	tmpfn := ir.NewFunc(fn.Pos())
-	tmpfn.Nname = ir.NewNameAt(fn.Nname.Pos(), callerfn.Sym())
-	tmpfn.Closgen = callerfn.Closgen
-	defer func() { callerfn.Closgen = tmpfn.Closgen }()
+	tmpfn := ir.NewFunc(fn.Pos(), fn.Nname.Pos(), callerfn.Sym(), fn.Type())
 
-	setType(tmpfn.Nname, fn.Type())
 	r.curfn = tmpfn
 
 	r.inlCaller = callerfn
@@ -3643,13 +3633,11 @@ func expandInline(fn *ir.Func, pri pkgReaderIndex) {
 	fndcls := len(fn.Dcl)
 	topdcls := len(typecheck.Target.Funcs)
 
-	tmpfn := ir.NewFunc(fn.Pos())
-	tmpfn.Nname = ir.NewNameAt(fn.Nname.Pos(), fn.Sym())
+	tmpfn := ir.NewFunc(fn.Pos(), fn.Nname.Pos(), fn.Sym(), fn.Type())
 	tmpfn.ClosureVars = fn.ClosureVars
 
 	{
 		r := pri.asReader(pkgbits.RelocBody, pkgbits.SyncFuncBody)
-		setType(tmpfn.Nname, fn.Type())
 
 		// Don't change parameter's Sym/Nname fields.
 		r.funarghack = true
@@ -3869,7 +3857,6 @@ func wrapMethodValue(recvType *types.Type, method *types.Field, target *ir.Packa
 	recv := ir.NewHiddenParam(pos, fn, typecheck.Lookup(".this"), recvType)
 
 	if !needed {
-		typecheck.Func(fn)
 		return
 	}
 
@@ -3879,29 +3866,15 @@ func wrapMethodValue(recvType *types.Type, method *types.Field, target *ir.Packa
 }
 
 func newWrapperFunc(pos src.XPos, sym *types.Sym, wrapper *types.Type, method *types.Field) *ir.Func {
-	fn := ir.NewFunc(pos)
-	fn.SetDupok(true) // TODO(mdempsky): Leave unset for local, non-generic wrappers?
-
-	name := ir.NewNameAt(pos, sym)
-	ir.MarkFunc(name)
-	name.Func = fn
-	name.Defn = fn
-	fn.Nname = name
-
 	sig := newWrapperType(wrapper, method)
-	setType(name, sig)
+
+	fn := ir.NewFunc(pos, pos, sym, sig)
+	fn.SetDupok(true) // TODO(mdempsky): Leave unset for local, non-generic wrappers?
 
 	// TODO(mdempsky): De-duplicate with similar logic in funcargs.
 	defParams := func(class ir.Class, params *types.Type) {
 		for _, param := range params.FieldSlice() {
-			name := ir.NewNameAt(param.Pos, param.Sym)
-			name.Class = class
-			setType(name, param.Type)
-
-			name.Curfn = fn
-			fn.Dcl = append(fn.Dcl, name)
-
-			param.Nname = name
+			param.Nname = fn.NewLocal(param.Pos, param.Sym, class, param.Type)
 		}
 	}
 
@@ -3913,8 +3886,6 @@ func newWrapperFunc(pos src.XPos, sym *types.Sym, wrapper *types.Type, method *t
 }
 
 func finishWrapperFunc(fn *ir.Func, target *ir.Package) {
-	typecheck.Func(fn)
-
 	ir.WithFunc(fn, func() {
 		typecheck.Stmts(fn.Body)
 	})
@@ -3937,6 +3908,7 @@ func finishWrapperFunc(fn *ir.Func, target *ir.Package) {
 		}
 	})
 
+	fn.Nname.Defn = fn
 	target.Funcs = append(target.Funcs, fn)
 }
 
