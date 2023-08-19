@@ -383,7 +383,7 @@ func walkSwitchType(sw *ir.SwitchStmt) {
 
 	s.facename = walkExpr(s.facename, sw.PtrInit())
 	s.facename = copyExpr(s.facename, s.facename.Type(), &sw.Compiled)
-	s.okname = typecheck.Temp(types.Types[types.TBOOL])
+	s.okname = typecheck.TempAt(base.Pos, ir.CurFunc, types.Types[types.TBOOL])
 
 	// Get interface descriptor word.
 	// For empty interfaces this will be the type.
@@ -736,6 +736,7 @@ func stringSearch(expr ir.Node, cc []exprClause, out *ir.Nodes) {
 	// Convert expr to a []int8
 	slice := ir.NewConvExpr(base.Pos, ir.OSTR2BYTESTMP, types.NewSlice(types.Types[types.TINT8]), expr)
 	slice.SetTypecheck(1) // legacy typechecker doesn't handle this op
+	slice.MarkNonNil()
 	// Load the byte we're splitting on.
 	load := ir.NewIndexExpr(base.Pos, slice, ir.NewInt(base.Pos, int64(bestIdx)))
 	// Compare with the value we're splitting on.

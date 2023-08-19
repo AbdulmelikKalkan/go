@@ -3287,10 +3287,7 @@ func (r *reader) exprType() ir.Node {
 		typ, rtype = r.rtype0(pos)
 
 		if !r.Bool() { // not derived
-			// TODO(mdempsky): ir.TypeNode should probably return a typecheck'd node.
-			n := ir.TypeNode(typ)
-			n.SetTypecheck(1)
-			return n
+			return ir.TypeNode(typ)
 		}
 	}
 
@@ -3446,10 +3443,7 @@ var inlgen = 0
 
 // unifiedInlineCall implements inline.NewInline by re-reading the function
 // body from its Unified IR export data.
-func unifiedInlineCall(call *ir.CallExpr, fn *ir.Func, inlIndex int) *ir.InlinedCallExpr {
-	// TODO(mdempsky): Turn callerfn into an explicit parameter.
-	callerfn := ir.CurFunc
-
+func unifiedInlineCall(callerfn *ir.Func, call *ir.CallExpr, fn *ir.Func, inlIndex int) *ir.InlinedCallExpr {
 	pri, ok := bodyReaderFor(fn)
 	if !ok {
 		base.FatalfAt(call.Pos(), "cannot inline call to %v: missing inline body", fn)

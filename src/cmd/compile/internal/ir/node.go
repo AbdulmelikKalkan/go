@@ -280,7 +280,6 @@ const (
 	// OTYPESW:  X := Y.(type) (appears as .Tag of OSWITCH)
 	//   X is nil if there is no type-switch variable
 	OTYPESW
-	OFUNCINST // instantiation of a generic function
 
 	// misc
 	// intermediate representation of an inlined call.  Uses Init (assignments
@@ -462,13 +461,6 @@ const (
 	RegisterParams // TODO(register args) remove after register abi is working
 
 )
-
-func AsNode(n types.Object) Node {
-	if n == nil {
-		return nil
-	}
-	return n.(Node)
-}
 
 var BlankNode *Name
 

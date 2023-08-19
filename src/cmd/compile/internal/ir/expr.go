@@ -106,9 +106,8 @@ func NewBasicLit(pos src.XPos, val constant.Value) Node {
 	n := &BasicLit{val: val}
 	n.op = OLITERAL
 	n.pos = pos
-	if k := val.Kind(); k != constant.Unknown {
-		n.SetType(idealType(k))
-	}
+	n.SetType(idealType(val.Kind()))
+	n.SetTypecheck(1)
 	return n
 }
 
@@ -432,15 +431,19 @@ func (n *MakeExpr) SetOp(op Op) {
 }
 
 // A NilExpr represents the predefined untyped constant nil.
-// (It may be copied and assigned a type, though.)
 type NilExpr struct {
 	miniExpr
 }
 
-func NewNilExpr(pos src.XPos) *NilExpr {
+func NewNilExpr(pos src.XPos, typ *types.Type) *NilExpr {
+	if typ == nil {
+		base.FatalfAt(pos, "missing type")
+	}
 	n := &NilExpr{}
 	n.pos = pos
 	n.op = ONIL
+	n.SetType(typ)
+	n.SetTypecheck(1)
 	return n
 }
 
@@ -498,9 +501,13 @@ type LinksymOffsetExpr struct {
 }
 
 func NewLinksymOffsetExpr(pos src.XPos, lsym *obj.LSym, offset int64, typ *types.Type) *LinksymOffsetExpr {
+	if typ == nil {
+		base.FatalfAt(pos, "nil type")
+	}
 	n := &LinksymOffsetExpr{Linksym: lsym, Offset_: offset}
 	n.typ = typ
 	n.op = OLINKSYMOFFSET
+	n.SetTypecheck(1)
 	return n
 }
 
@@ -751,25 +758,6 @@ func (n *UnaryExpr) SetOp(op Op) {
 		OUNSAFESTRINGDATA, OUNSAFESLICEDATA:
 		n.op = op
 	}
-}
-
-// Probably temporary: using Implicit() flag to mark generic function nodes that
-// are called to make getGfInfo analysis easier in one pre-order pass.
-func (n *InstExpr) Implicit() bool     { return n.flags&miniExprImplicit != 0 }
-func (n *InstExpr) SetImplicit(b bool) { n.flags.set(miniExprImplicit, b) }
-
-// An InstExpr is a generic function or type instantiation.
-type InstExpr struct {
-	miniExpr
-	X     Node
-	Targs []Ntype
-}
-
-func NewInstExpr(pos src.XPos, op Op, x Node, targs []Ntype) *InstExpr {
-	n := &InstExpr{X: x, Targs: targs}
-	n.pos = pos
-	n.op = op
-	return n
 }
 
 func IsZero(n Node) bool {
@@ -1129,7 +1117,7 @@ func IsReflectHeaderDataField(l Node) bool {
 func ParamNames(ft *types.Type) []Node {
 	args := make([]Node, ft.NumParams())
 	for i, f := range ft.Params().FieldSlice() {
-		args[i] = AsNode(f.Nname)
+		args[i] = f.Nname.(*Name)
 	}
 	return args
 }
