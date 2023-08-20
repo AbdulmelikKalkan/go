@@ -20,10 +20,6 @@ import (
 // to be included in the package-level init function.
 var InitTodoFunc = ir.NewFunc(base.Pos, base.Pos, Lookup("$InitTodo"), types.NewSignature(nil, nil, nil))
 
-var (
-	NeedRuntimeType = func(*types.Type) {}
-)
-
 func AssignExpr(n ir.Node) ir.Node { return typecheck(n, ctxExpr|ctxAssign) }
 func Expr(n ir.Node) ir.Node       { return typecheck(n, ctxExpr) }
 func Stmt(n ir.Node) ir.Node       { return typecheck(n, ctxStmt) }
@@ -847,64 +843,35 @@ func Lookdot1(errnode ir.Node, s *types.Sym, t *types.Type, fs *types.Fields, do
 	return r
 }
 
-// typecheckMethodExpr checks selector expressions (ODOT) where the
-// base expression is a type expression (OTYPE).
-func typecheckMethodExpr(n *ir.SelectorExpr) (res ir.Node) {
-	if base.EnableTrace && base.Flag.LowerT {
-		defer tracePrint("typecheckMethodExpr", n)(&res)
-	}
-
-	t := n.X.Type()
-
-	// Compute the method set for t.
+// NewMethodExpr returns an OMETHEXPR node representing method
+// expression "recv.sym".
+func NewMethodExpr(pos src.XPos, recv *types.Type, sym *types.Sym) *ir.SelectorExpr {
+	// Compute the method set for recv.
 	var ms *types.Fields
-	if t.IsInterface() {
-		ms = t.AllMethods()
+	if recv.IsInterface() {
+		ms = recv.AllMethods()
 	} else {
-		mt := types.ReceiverBaseType(t)
+		mt := types.ReceiverBaseType(recv)
 		if mt == nil {
-			base.Errorf("%v undefined (type %v has no method %v)", n, t, n.Sel)
-			n.SetType(nil)
-			return n
+			base.FatalfAt(pos, "type %v has no receiver base type", recv)
 		}
 		CalcMethods(mt)
 		ms = mt.AllMethods()
-
-		// The method expression T.m requires a wrapper when T
-		// is different from m's declared receiver type. We
-		// normally generate these wrappers while writing out
-		// runtime type descriptors, which is always done for
-		// types declared at package scope. However, we need
-		// to make sure to generate wrappers for anonymous
-		// receiver types too.
-		if mt.Sym() == nil {
-			NeedRuntimeType(t)
-		}
 	}
 
-	s := n.Sel
-	m := Lookdot1(n, s, t, ms, 0)
+	m := Lookdot1(nil, sym, recv, ms, 0)
 	if m == nil {
-		if Lookdot1(n, s, t, ms, 1) != nil {
-			base.Errorf("%v undefined (cannot refer to unexported method %v)", n, s)
-		} else if _, ambig := dotpath(s, t, nil, false); ambig {
-			base.Errorf("%v undefined (ambiguous selector)", n) // method or field
-		} else {
-			base.Errorf("%v undefined (type %v has no method %v)", n, t, s)
-		}
-		n.SetType(nil)
-		return n
+		base.FatalfAt(pos, "type %v has no method %v", recv, sym)
 	}
 
-	if !types.IsMethodApplicable(t, m) {
-		base.Errorf("invalid method expression %v (needs pointer receiver: (*%v).%S)", n, t, s)
-		n.SetType(nil)
-		return n
+	if !types.IsMethodApplicable(recv, m) {
+		base.FatalfAt(pos, "invalid method expression %v.%v (needs pointer receiver)", recv, sym)
 	}
 
-	n.SetOp(ir.OMETHEXPR)
+	n := ir.NewSelectorExpr(pos, ir.OMETHEXPR, ir.TypeNode(recv), sym)
 	n.Selection = m
-	n.SetType(NewMethodType(m.Type, n.X.Type()))
+	n.SetType(NewMethodType(m.Type, recv))
+	n.SetTypecheck(1)
 	return n
 }
 

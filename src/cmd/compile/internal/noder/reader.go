@@ -1404,8 +1404,7 @@ func (pr *pkgReader) dictNameOf(dict *readerDict) *ir.Name {
 	assertOffset("type param method exprs", dict.typeParamMethodExprsOffset())
 	for _, info := range dict.typeParamMethodExprs {
 		typeParam := dict.targs[info.typeParamIdx]
-		method := typecheck.Expr(ir.NewSelectorExpr(pos, ir.OXDOT, ir.TypeNode(typeParam), info.method)).(*ir.SelectorExpr)
-		assert(method.Op() == ir.OMETHEXPR)
+		method := typecheck.NewMethodExpr(pos, typeParam, info.method)
 
 		rsym := method.FuncName().Linksym()
 		assert(rsym.ABI() == obj.ABIInternal) // must be ABIInternal; see ir.OCFUNC in ssagen/ssa.go
@@ -2174,7 +2173,7 @@ func (r *reader) expr() (res ir.Node) {
 		pos := r.pos()
 		_, sym := r.selector()
 
-		return typecheck.Expr(ir.NewSelectorExpr(pos, ir.OXDOT, x, sym)).(*ir.SelectorExpr)
+		return typecheck.XDotField(pos, x, sym)
 
 	case exprMethodVal:
 		recv := r.expr()
@@ -2209,7 +2208,7 @@ func (r *reader) expr() (res ir.Node) {
 				recv = typecheck.Expr(ir.NewConvExpr(recv.Pos(), ir.OCONVNOP, typ, recv))
 			}
 
-			n := typecheck.Expr(ir.NewSelectorExpr(pos, ir.OXDOT, recv, wrapperFn.Sel)).(*ir.SelectorExpr)
+			n := typecheck.XDotMethod(pos, recv, wrapperFn.Sel, false)
 
 			// As a consistency check here, we make sure "n" selected the
 			// same method (represented by a types.Field) that wrapperFn
@@ -2274,7 +2273,7 @@ func (r *reader) expr() (res ir.Node) {
 		// expression (OMETHEXPR) and the receiver type is unshaped, then
 		// we can rely on a statically generated wrapper being available.
 		if method, ok := wrapperFn.(*ir.SelectorExpr); ok && method.Op() == ir.OMETHEXPR && !recv.HasShape() {
-			return typecheck.Expr(ir.NewSelectorExpr(pos, ir.OXDOT, ir.TypeNode(recv), method.Sel)).(*ir.SelectorExpr)
+			return typecheck.NewMethodExpr(pos, recv, method.Sel)
 		}
 
 		return r.methodExprWrap(origPos, recv, implicits, deref, addr, baseFn, dictPtr)
@@ -2348,7 +2347,7 @@ func (r *reader) expr() (res ir.Node) {
 		x := r.expr()
 		pos := r.pos()
 		for i, n := 0, r.Len(); i < n; i++ {
-			x = Implicit(DotField(pos, x, r.Len()))
+			x = Implicit(typecheck.DotField(pos, x, r.Len()))
 		}
 		if r.Bool() { // needs deref
 			x = Implicit(Deref(pos, x.Type().Elem(), x))
@@ -2375,7 +2374,7 @@ func (r *reader) expr() (res ir.Node) {
 				// There are also corner cases where semantically it's perhaps
 				// significant; e.g., fixedbugs/issue15975.go, #38634, #52025.
 
-				fun = typecheck.Callee(ir.NewSelectorExpr(method.Pos(), ir.OXDOT, recv, method.Sel))
+				fun = typecheck.XDotMethod(method.Pos(), recv, method.Sel, true)
 			} else {
 				if recv.Type().IsInterface() {
 					// N.B., this happens currently for typeparam/issue51521.go
@@ -2666,7 +2665,7 @@ func (r *reader) methodExprWrap(origPos src.XPos, recv *types.Type, implicits []
 		{
 			arg := args[0]
 			for _, ix := range implicits {
-				arg = Implicit(DotField(pos, arg, ix))
+				arg = Implicit(typecheck.DotField(pos, arg, ix))
 			}
 			if deref {
 				arg = Implicit(Deref(pos, arg.Type().Elem(), arg))
@@ -2891,7 +2890,7 @@ func (r *reader) methodExpr() (wrapperFn, baseFn, dictPtr ir.Node) {
 		// For statically known instantiations, we can take advantage of
 		// the stenciled wrapper.
 		base.AssertfAt(!recv.HasShape(), pos, "shaped receiver %v", recv)
-		wrapperFn := typecheck.Expr(ir.NewSelectorExpr(pos, ir.OXDOT, ir.TypeNode(recv), sym)).(*ir.SelectorExpr)
+		wrapperFn := typecheck.NewMethodExpr(pos, recv, sym)
 		base.AssertfAt(types.Identical(sig, wrapperFn.Type()), pos, "wrapper %L does not have type %v", wrapperFn, sig)
 
 		return wrapperFn, shapedFn, dictPtr
@@ -2899,7 +2898,7 @@ func (r *reader) methodExpr() (wrapperFn, baseFn, dictPtr ir.Node) {
 
 	// Simple method expression; no dictionary needed.
 	base.AssertfAt(!recv.HasShape() || recv.IsInterface(), pos, "shaped receiver %v", recv)
-	fn := typecheck.Expr(ir.NewSelectorExpr(pos, ir.OXDOT, ir.TypeNode(recv), sym)).(*ir.SelectorExpr)
+	fn := typecheck.NewMethodExpr(pos, recv, sym)
 	return fn, fn, nil
 }
 
@@ -2924,7 +2923,7 @@ func shapedMethodExpr(pos src.XPos, obj *ir.Name, sym *types.Sym) *ir.SelectorEx
 
 	// Construct an OMETHEXPR node.
 	recv := method.Type.Recv().Type
-	return typecheck.Expr(ir.NewSelectorExpr(pos, ir.OXDOT, ir.TypeNode(recv), sym)).(*ir.SelectorExpr)
+	return typecheck.NewMethodExpr(pos, recv, sym)
 }
 
 func (r *reader) multiExpr() []ir.Node {
@@ -3948,7 +3947,7 @@ func addTailCall(pos src.XPos, fn *ir.Func, recv ir.Node, method *types.Field) {
 
 	fn.SetWrapper(true) // TODO(mdempsky): Leave unset for tail calls?
 
-	dot := ir.NewSelectorExpr(pos, ir.OXDOT, recv, method.Sym)
+	dot := typecheck.XDotMethod(pos, recv, method.Sym, true)
 	call := typecheck.Call(pos, dot, args, method.Type.IsVariadic()).(*ir.CallExpr)
 
 	if method.Type.NumResults() == 0 {
