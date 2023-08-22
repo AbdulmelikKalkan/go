@@ -129,11 +129,7 @@ func staticCall(call *ir.CallExpr) {
 		call.SetOp(ir.OCALLINTER)
 		call.X = x
 	default:
-		// TODO(mdempsky): Turn back into Fatalf after more testing.
-		if base.Flag.LowerM != 0 {
-			base.WarnfAt(call.Pos(), "failed to devirtualize %v (%v)", x, x.Op())
-		}
-		return
+		base.FatalfAt(call.Pos(), "failed to devirtualize %v (%v)", x, x.Op())
 	}
 
 	// Duplicated logic from typecheck for function call return
@@ -146,9 +142,9 @@ func staticCall(call *ir.CallExpr) {
 	switch ft := x.Type(); ft.NumResults() {
 	case 0:
 	case 1:
-		call.SetType(ft.Results().Field(0).Type)
+		call.SetType(ft.Result(0).Type)
 	default:
-		call.SetType(ft.Results())
+		call.SetType(ft.ResultsTuple())
 	}
 
 	// Desugar OCALLMETH, if we created one (#57309).

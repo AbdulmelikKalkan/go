@@ -173,7 +173,7 @@ func appendParamTypes(rts []*types.Type, t *types.Type) []*types.Type {
 				rts = appendParamTypes(rts, t.Elem())
 			}
 		case types.TSTRUCT:
-			for _, f := range t.FieldSlice() {
+			for _, f := range t.Fields() {
 				if f.Type.Size() > 0 { // embedded zero-width types receive no registers
 					rts = appendParamTypes(rts, f.Type)
 				}
@@ -212,7 +212,7 @@ func appendParamOffsets(offsets []int64, at int64, t *types.Type) ([]int64, int6
 				offsets, at = appendParamOffsets(offsets, at, t.Elem())
 			}
 		case types.TSTRUCT:
-			for i, f := range t.FieldSlice() {
+			for i, f := range t.Fields() {
 				offsets, at = appendParamOffsets(offsets, at, f.Type)
 				if f.Type.Size() == 0 && i == t.NumFields()-1 {
 					at++ // last field has zero width
@@ -310,7 +310,7 @@ func (a *ABIConfig) NumParamRegs(t *types.Type) int {
 		case types.TARRAY:
 			n = a.NumParamRegs(t.Elem()) * int(t.NumElem())
 		case types.TSTRUCT:
-			for _, f := range t.FieldSlice() {
+			for _, f := range t.Fields() {
 				n += a.NumParamRegs(f.Type)
 			}
 		case types.TSLICE:
@@ -380,25 +380,24 @@ func (config *ABIConfig) ABIAnalyzeTypes(rcvr *types.Type, ins, outs []*types.Ty
 // 'config' and analyzes the function to determine how its parameters
 // and results will be passed (in registers or on the stack), returning
 // an ABIParamResultInfo object that holds the results of the analysis.
-func (config *ABIConfig) ABIAnalyzeFuncType(ft *types.Func) *ABIParamResultInfo {
+func (config *ABIConfig) ABIAnalyzeFuncType(ft *types.Type) *ABIParamResultInfo {
 	setup()
 	s := assignState{
 		stackOffset: config.offsetForLocals,
 		rTotal:      config.regAmounts,
 	}
 	result := &ABIParamResultInfo{config: config}
-	result.preAllocateParams(ft.Receiver != nil, ft.Params.NumFields(), ft.Results.NumFields())
+	result.preAllocateParams(ft.Recv() != nil, ft.NumParams(), ft.NumResults())
 
 	// Receiver
 	// TODO(register args) ? seems like "struct" and "fields" is not right anymore for describing function parameters
-	if ft.Receiver != nil && ft.Receiver.NumFields() != 0 {
-		r := ft.Receiver.FieldSlice()[0]
+	if r := ft.Recv(); r != nil {
 		result.inparams = append(result.inparams,
 			s.assignParamOrReturn(r.Type, r.Nname, false))
 	}
 
 	// Inputs
-	ifsl := ft.Params.FieldSlice()
+	ifsl := ft.Params()
 	for _, f := range ifsl {
 		result.inparams = append(result.inparams,
 			s.assignParamOrReturn(f.Type, f.Nname, false))
@@ -408,7 +407,7 @@ func (config *ABIConfig) ABIAnalyzeFuncType(ft *types.Func) *ABIParamResultInfo 
 
 	// Outputs
 	s.rUsed = RegAmounts{}
-	ofsl := ft.Results.FieldSlice()
+	ofsl := ft.Results()
 	for _, f := range ofsl {
 		result.outparams = append(result.outparams, s.assignParamOrReturn(f.Type, f.Nname, true))
 	}
@@ -428,19 +427,18 @@ func (config *ABIConfig) ABIAnalyzeFuncType(ft *types.Func) *ABIParamResultInfo 
 // outputs because their frame location transitions from BOGUS_FUNARG_OFFSET
 // to zero to an as-if-AUTO offset that has no use for callers.
 func (config *ABIConfig) ABIAnalyze(t *types.Type, setNname bool) *ABIParamResultInfo {
-	ft := t.FuncType()
-	result := config.ABIAnalyzeFuncType(ft)
+	result := config.ABIAnalyzeFuncType(t)
 
 	// Fill in the frame offsets for receiver, inputs, results
 	k := 0
 	if t.NumRecvs() != 0 {
-		config.updateOffset(result, ft.Receiver.FieldSlice()[0], result.inparams[0], false, setNname)
+		config.updateOffset(result, t.Recv(), result.inparams[0], false, setNname)
 		k++
 	}
-	for i, f := range ft.Params.FieldSlice() {
+	for i, f := range t.Params() {
 		config.updateOffset(result, f, result.inparams[k+i], false, setNname)
 	}
-	for i, f := range ft.Results.FieldSlice() {
+	for i, f := range t.Results() {
 		config.updateOffset(result, f, result.outparams[i], true, setNname)
 	}
 	return result
@@ -585,7 +583,7 @@ func (state *assignState) allocateRegs(regs []RegIndex, t *types.Type) []RegInde
 			}
 			return regs
 		case types.TSTRUCT:
-			for _, f := range t.FieldSlice() {
+			for _, f := range t.Fields() {
 				regs = state.allocateRegs(regs, f.Type)
 			}
 			return regs
@@ -692,7 +690,7 @@ func (state *assignState) regassignArray(t *types.Type) bool {
 // some other enclosing type) to determine if it can be register
 // assigned. Returns TRUE if we can register allocate, FALSE otherwise.
 func (state *assignState) regassignStruct(t *types.Type) bool {
-	for _, field := range t.FieldSlice() {
+	for _, field := range t.Fields() {
 		if !state.regassign(field.Type) {
 			return false
 		}

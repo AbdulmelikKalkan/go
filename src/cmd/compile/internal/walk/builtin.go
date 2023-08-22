@@ -302,7 +302,7 @@ func walkMakeChan(n *ir.MakeExpr, init *ir.Nodes) ir.Node {
 // walkMakeMap walks an OMAKEMAP node.
 func walkMakeMap(n *ir.MakeExpr, init *ir.Nodes) ir.Node {
 	t := n.Type()
-	hmapType := reflectdata.MapType(t)
+	hmapType := reflectdata.MapType()
 	hint := n.Len
 
 	// var h *hmap
@@ -340,7 +340,7 @@ func walkMakeMap(n *ir.MakeExpr, init *ir.Nodes) ir.Node {
 
 			// h.buckets = b
 			bsym := hmapType.Field(5).Sym // hmap.buckets see reflect.go:hmap
-			na := ir.NewAssignStmt(base.Pos, ir.NewSelectorExpr(base.Pos, ir.ODOT, h, bsym), b)
+			na := ir.NewAssignStmt(base.Pos, ir.NewSelectorExpr(base.Pos, ir.ODOT, h, bsym), typecheck.ConvNop(b, types.Types[types.TUNSAFEPTR]))
 			nif.Body.Append(na)
 			appendWalkStmt(init, nif)
 		}
@@ -663,7 +663,7 @@ func walkPrint(nn *ir.CallExpr, init *ir.Nodes) ir.Node {
 		}
 
 		r := ir.NewCallExpr(base.Pos, ir.OCALL, on, nil)
-		if params := on.Type().Params().FieldSlice(); len(params) > 0 {
+		if params := on.Type().Params(); len(params) > 0 {
 			t := params[0].Type
 			n = typecheck.Conv(n, t)
 			r.Args.Append(n)
@@ -757,7 +757,7 @@ func walkUnsafeSlice(n *ir.BinaryExpr, init *ir.Nodes) ir.Node {
 		mem := typecheck.TempAt(base.Pos, ir.CurFunc, types.Types[types.TUINTPTR])
 		overflow := typecheck.TempAt(base.Pos, ir.CurFunc, types.Types[types.TBOOL])
 		fn := typecheck.LookupRuntime("mulUintptr")
-		call := mkcall1(fn, fn.Type().Results(), init, ir.NewInt(base.Pos, sliceType.Elem().Size()), typecheck.Conv(typecheck.Conv(len, lenType), types.Types[types.TUINTPTR]))
+		call := mkcall1(fn, fn.Type().ResultsTuple(), init, ir.NewInt(base.Pos, sliceType.Elem().Size()), typecheck.Conv(typecheck.Conv(len, lenType), types.Types[types.TUINTPTR]))
 		appendWalkStmt(init, ir.NewAssignListStmt(base.Pos, ir.OAS2, []ir.Node{mem, overflow}, []ir.Node{call}))
 
 		// if overflow || mem > -uintptr(ptr) {

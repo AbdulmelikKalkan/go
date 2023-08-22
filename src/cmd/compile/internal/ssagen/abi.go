@@ -253,8 +253,8 @@ func makeABIWrapper(f *ir.Func, wrapperABI obj.ABI) {
 	// Reuse f's types.Sym to create a new ODCLFUNC/function.
 	// TODO(mdempsky): Means we can't set sym.Def in Declfunc, ugh.
 	fn := ir.NewFunc(pos, pos, f.Sym(), types.NewSignature(nil,
-		typecheck.NewFuncParams(ft.Params().FieldSlice(), true),
-		typecheck.NewFuncParams(ft.Results().FieldSlice(), false)))
+		typecheck.NewFuncParams(ft.Params(), true),
+		typecheck.NewFuncParams(ft.Results(), false)))
 	fn.ABI = wrapperABI
 	typecheck.DeclFunc(fn)
 
@@ -436,7 +436,7 @@ func setupWasmABI(f *ir.Func) {
 		//
 		// 	(import "a_module" "add" (func (param i32 i32) (result i32)))
 		abiConfig := AbiForBodylessFuncStackMap(f)
-		abiInfo := abiConfig.ABIAnalyzeFuncType(f.Type().FuncType())
+		abiInfo := abiConfig.ABIAnalyzeFuncType(f.Type())
 		wi.Params = paramsToWasmFields(f, abiInfo, abiInfo.InParams())
 		wi.Results = resultsToWasmFields(f, abiInfo, abiInfo.OutParams())
 	}

@@ -9,6 +9,7 @@ import (
 	"cmd/compile/internal/ir"
 	"cmd/compile/internal/typecheck"
 	"cmd/compile/internal/types"
+	"cmd/internal/src"
 )
 
 func walkSelect(sel *ir.SelectStmt) {
@@ -127,7 +128,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
 			}
 			cond = typecheck.TempAt(base.Pos, ir.CurFunc, types.Types[types.TBOOL])
 			fn := chanfn("selectnbrecv", 2, ch.Type())
-			call := mkcall1(fn, fn.Type().Results(), r.PtrInit(), elem, ch)
+			call := mkcall1(fn, fn.Type().ResultsTuple(), r.PtrInit(), elem, ch)
 			as := ir.NewAssignListStmt(r.Pos(), ir.OAS2, []ir.Node{cond, n.Lhs[1]}, []ir.Node{call})
 			r.PtrInit().Append(typecheck.Stmt(as))
 		}
@@ -226,7 +227,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
 	r.Lhs = []ir.Node{chosen, recvOK}
 	fn := typecheck.LookupRuntime("selectgo")
 	var fnInit ir.Nodes
-	r.Rhs = []ir.Node{mkcall1(fn, fn.Type().Results(), &fnInit, bytePtrToIndex(selv, 0), bytePtrToIndex(order, 0), pc0, ir.NewInt(base.Pos, int64(nsends)), ir.NewInt(base.Pos, int64(nrecvs)), ir.NewBool(base.Pos, dflt == nil))}
+	r.Rhs = []ir.Node{mkcall1(fn, fn.Type().ResultsTuple(), &fnInit, bytePtrToIndex(selv, 0), bytePtrToIndex(order, 0), pc0, ir.NewInt(base.Pos, int64(nsends)), ir.NewInt(base.Pos, int64(nrecvs)), ir.NewBool(base.Pos, dflt == nil))}
 	init = append(init, fnInit...)
 	init = append(init, typecheck.Stmt(r))
 
@@ -287,11 +288,15 @@ var scase *types.Type
 // Keep in sync with src/runtime/select.go.
 func scasetype() *types.Type {
 	if scase == nil {
-		scase = types.NewStruct([]*types.Field{
+		n := ir.NewDeclNameAt(src.NoXPos, ir.OTYPE, ir.Pkgs.Runtime.Lookup("scase"))
+		scase = types.NewNamed(n)
+		n.SetType(scase)
+		n.SetTypecheck(1)
+
+		scase.SetUnderlying(types.NewStruct([]*types.Field{
 			types.NewField(base.Pos, typecheck.Lookup("c"), types.Types[types.TUNSAFEPTR]),
 			types.NewField(base.Pos, typecheck.Lookup("elem"), types.Types[types.TUNSAFEPTR]),
-		})
-		scase.SetNoalg(true)
+		}))
 	}
 	return scase
 }

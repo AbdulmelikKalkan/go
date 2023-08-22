@@ -241,13 +241,13 @@ func walkRange(nrange *ir.RangeStmt) ir.Node {
 		fn = typecheck.SubstArgTypes(fn, th)
 		nfor.Post = mkcallstmt1(fn, typecheck.NodAddr(hit))
 
-		key := ir.NewStarExpr(base.Pos, ir.NewSelectorExpr(base.Pos, ir.ODOT, hit, keysym))
+		key := ir.NewStarExpr(base.Pos, typecheck.ConvNop(ir.NewSelectorExpr(base.Pos, ir.ODOT, hit, keysym), types.NewPtr(t.Key())))
 		if v1 == nil {
 			body = nil
 		} else if v2 == nil {
 			body = []ir.Node{rangeAssign(nrange, key)}
 		} else {
-			elem := ir.NewStarExpr(base.Pos, ir.NewSelectorExpr(base.Pos, ir.ODOT, hit, elemsym))
+			elem := ir.NewStarExpr(base.Pos, typecheck.ConvNop(ir.NewSelectorExpr(base.Pos, ir.ODOT, hit, elemsym), types.NewPtr(t.Elem())))
 			body = []ir.Node{rangeAssign2(nrange, key, elem)}
 		}
 
@@ -327,7 +327,7 @@ func walkRange(nrange *ir.RangeStmt) ir.Node {
 		// } else {
 		// hv2, hv1 = decoderune(ha, hv1)
 		fn := typecheck.LookupRuntime("decoderune")
-		call := mkcall1(fn, fn.Type().Results(), &nif.Else, ha, hv1)
+		call := mkcall1(fn, fn.Type().ResultsTuple(), &nif.Else, ha, hv1)
 		a := ir.NewAssignListStmt(base.Pos, ir.OAS2, []ir.Node{hv2, hv1}, []ir.Node{call})
 		nif.Else.Append(a)
 
