@@ -219,34 +219,3 @@ func AdjustStartingHeap(requestedHeapGoal uint64) {
 
 	forEachGC(adjustFunc)
 }
-
-func Compiling(pkgs []string) bool {
-	if Ctxt.Pkgpath != "" {
-		for _, p := range pkgs {
-			if Ctxt.Pkgpath == p {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// Do not instrument the following packages at all,
-// at best instrumentation would cause infinite recursion.
-var NoInstrumentPkgs = []string{
-	"runtime/internal/atomic",
-	"runtime/internal/math",
-	"runtime/internal/sys",
-	"runtime/internal/syscall",
-	"runtime",
-	"runtime/race",
-	"runtime/msan",
-	"runtime/asan",
-	"internal/cpu",
-	"internal/abi",
-}
-
-// Don't insert racefuncenter/racefuncexit into the following packages.
-// Memory accesses in the packages are either uninteresting or will cause false positives.
-var NoRacePkgs = []string{"sync", "sync/atomic"}

@@ -6,6 +6,7 @@ package types
 
 import (
 	"cmd/compile/internal/base"
+	"cmd/internal/objabi"
 	"cmd/internal/src"
 	"fmt"
 	"internal/types/errors"
@@ -298,15 +299,24 @@ func (t *Type) forwardType() *Forward {
 
 // Func contains Type fields specific to func types.
 type Func struct {
-	Receiver *Type // function receiver
-	Results  *Type // function results
-	Params   *Type // function params
+	allParams []*Field // slice of all parameters, in receiver/params/results order
+
+	startParams  int // index of the start of the (regular) parameters section
+	startResults int // index of the start of the results section
+
+	resultsTuple *Type // struct-like type representing multi-value results
 
 	// Argwid is the total width of the function receiver, params, and results.
 	// It gets calculated via a temporary TFUNCARGS type.
 	// Note that TFUNC's Width is Widthptr.
 	Argwid int64
 }
+
+func (ft *Func) recvs() []*Field         { return ft.allParams[:ft.startParams] }
+func (ft *Func) params() []*Field        { return ft.allParams[ft.startParams:ft.startResults] }
+func (ft *Func) results() []*Field       { return ft.allParams[ft.startResults:] }
+func (ft *Func) recvParams() []*Field    { return ft.allParams[:ft.startResults] }
+func (ft *Func) paramsResults() []*Field { return ft.allParams[ft.startParams:] }
 
 // funcType returns t's extra func-specific fields.
 func (t *Type) funcType() *Func {
@@ -322,19 +332,8 @@ type Struct struct {
 	// Map links such structs back to their map type.
 	Map *Type
 
-	Funarg Funarg // type of function arguments for arg struct
+	ParamTuple bool // whether this struct is actually a tuple of signature parameters
 }
-
-// Funarg records the kind of function argument
-type Funarg uint8
-
-const (
-	FunargNone    Funarg = iota
-	FunargRcvr           // receiver
-	FunargParams         // input parameters
-	FunargResults        // output results
-	FunargTparams        // type params
-)
 
 // StructType returns t's extra struct-specific fields.
 func (t *Type) StructType() *Struct {
@@ -419,8 +418,7 @@ type Field struct {
 	Nname Object
 
 	// Offset in bytes of this field or method within its enclosing struct
-	// or interface Type.  Exception: if field is function receiver, arg or
-	// result, then this is BOGUS_FUNARG_OFFSET; types does not know the Abi.
+	// or interface Type. For parameters, this is BADWIDTH.
 	Offset int64
 }
 
@@ -713,32 +711,38 @@ func SubstAny(t *Type, types *[]*Type) *Type {
 		}
 
 	case TFUNC:
-		recvs := SubstAny(t.recvsTuple(), types)
-		params := SubstAny(t.paramsTuple(), types)
-		results := SubstAny(t.ResultsTuple(), types)
-		if recvs != t.recvsTuple() || params != t.paramsTuple() || results != t.ResultsTuple() {
-			t = t.copy()
-			t.funcType().Receiver = recvs
-			t.funcType().Results = results
-			t.funcType().Params = params
-		}
+		ft := t.funcType()
+		allParams := substFields(ft.allParams, types)
+
+		t = t.copy()
+		ft = t.funcType()
+		ft.allParams = allParams
+
+		rt := ft.resultsTuple
+		rt = rt.copy()
+		ft.resultsTuple = rt
+		rt.setFields(t.Results())
 
 	case TSTRUCT:
 		// Make a copy of all fields, including ones whose type does not change.
 		// This prevents aliasing across functions, which can lead to later
 		// fields getting their Offset incorrectly overwritten.
-		fields := t.Fields()
-		nfs := make([]*Field, len(fields))
-		for i, f := range fields {
-			nft := SubstAny(f.Type, types)
-			nfs[i] = f.Copy()
-			nfs[i].Type = nft
-		}
+		nfs := substFields(t.Fields(), types)
 		t = t.copy()
 		t.setFields(nfs)
 	}
 
 	return t
+}
+
+func substFields(fields []*Field, types *[]*Type) []*Field {
+	nfs := make([]*Field, len(fields))
+	for i, f := range fields {
+		nft := SubstAny(f.Type, types)
+		nfs[i] = f.Copy()
+		nfs[i].Type = nft
+	}
+	return nfs
 }
 
 // copy returns a shallow copy of the Type.
@@ -791,26 +795,36 @@ func (t *Type) wantEtype(et Kind) {
 	}
 }
 
-func (t *Type) recvsTuple() *Type  { return t.funcType().Receiver }
-func (t *Type) paramsTuple() *Type { return t.funcType().Params }
-
 // ResultTuple returns the result type of signature type t as a tuple.
 // This can be used as the type of multi-valued call expressions.
-func (t *Type) ResultsTuple() *Type { return t.funcType().Results }
+func (t *Type) ResultsTuple() *Type { return t.funcType().resultsTuple }
 
 // Recvs returns a slice of receiver parameters of signature type t.
 // The returned slice always has length 0 or 1.
-func (t *Type) Recvs() []*Field { return t.funcType().Receiver.Fields() }
+func (t *Type) Recvs() []*Field { return t.funcType().recvs() }
 
 // Params returns a slice of regular parameters of signature type t.
-func (t *Type) Params() []*Field { return t.funcType().Params.Fields() }
+func (t *Type) Params() []*Field { return t.funcType().params() }
 
 // Results returns a slice of result parameters of signature type t.
-func (t *Type) Results() []*Field { return t.funcType().Results.Fields() }
+func (t *Type) Results() []*Field { return t.funcType().results() }
 
-func (t *Type) NumRecvs() int   { return t.funcType().Receiver.NumFields() }
-func (t *Type) NumParams() int  { return t.funcType().Params.NumFields() }
-func (t *Type) NumResults() int { return t.funcType().Results.NumFields() }
+// RecvsParamsResults returns a slice containing all of the
+// signature's parameters in receiver (if any), (normal) parameters,
+// and then results.
+func (t *Type) RecvParamsResults() []*Field { return t.funcType().allParams }
+
+// RecvParams returns a slice containing the signature's receiver (if
+// any) followed by its (normal) parameters.
+func (t *Type) RecvParams() []*Field { return t.funcType().recvParams() }
+
+// ParamsResults returns a slice containing the signature's (normal)
+// parameters followed by its results.
+func (t *Type) ParamsResults() []*Field { return t.funcType().paramsResults() }
+
+func (t *Type) NumRecvs() int   { return len(t.Recvs()) }
+func (t *Type) NumParams() int  { return len(t.Params()) }
+func (t *Type) NumResults() int { return len(t.Results()) }
 
 // IsVariadic reports whether function type t is variadic.
 func (t *Type) IsVariadic() bool {
@@ -820,11 +834,10 @@ func (t *Type) IsVariadic() bool {
 
 // Recv returns the receiver of function type t, if any.
 func (t *Type) Recv() *Field {
-	s := t.recvsTuple()
-	if s.NumFields() == 0 {
-		return nil
+	if s := t.Recvs(); len(s) == 1 {
+		return s[0]
 	}
-	return s.Field(0)
+	return nil
 }
 
 // Param returns the i'th parameter of signature type t.
@@ -832,23 +845,6 @@ func (t *Type) Param(i int) *Field { return t.Params()[i] }
 
 // Result returns the i'th result of signature type t.
 func (t *Type) Result(i int) *Field { return t.Results()[i] }
-
-// RecvsParamsResults stores the accessor functions for a function Type's
-// receiver, parameters, and result parameters, in that order.
-// It can be used to iterate over all of a function's parameter lists.
-var RecvsParamsResults = [3]func(*Type) []*Field{
-	(*Type).Recvs, (*Type).Params, (*Type).Results,
-}
-
-// RecvsParams is like RecvsParamsResults, but omits result parameters.
-var RecvsParams = [2]func(*Type) []*Field{
-	(*Type).Recvs, (*Type).Params,
-}
-
-// ParamsResults is like RecvsParamsResults, but omits receiver parameters.
-var ParamsResults = [2]func(*Type) []*Field{
-	(*Type).Params, (*Type).Results,
-}
 
 // Key returns the key type of map type t.
 func (t *Type) Key() *Type {
@@ -889,7 +885,7 @@ func (t *Type) FuncArgs() *Type {
 
 // IsFuncArgStruct reports whether t is a struct representing function parameters or results.
 func (t *Type) IsFuncArgStruct() bool {
-	return t.kind == TSTRUCT && t.extra.(*Struct).Funarg != FunargNone
+	return t.kind == TSTRUCT && t.extra.(*Struct).ParamTuple
 }
 
 // Methods returns a pointer to the base methods (excluding embedding) for type t.
@@ -1223,22 +1219,24 @@ func (t *Type) cmp(x *Type) Cmp {
 		return CMPeq
 
 	case TFUNC:
-		for _, f := range &RecvsParamsResults {
-			// Loop over fields in structs, ignoring argument names.
-			tfs := f(t)
-			xfs := f(x)
-			for i := 0; i < len(tfs) && i < len(xfs); i++ {
-				ta := tfs[i]
-				tb := xfs[i]
-				if ta.IsDDD() != tb.IsDDD() {
-					return cmpForNe(!ta.IsDDD())
-				}
-				if c := ta.Type.cmp(tb.Type); c != CMPeq {
-					return c
-				}
-			}
-			if len(tfs) != len(xfs) {
-				return cmpForNe(len(tfs) < len(xfs))
+		if tn, xn := t.NumRecvs(), x.NumRecvs(); tn != xn {
+			return cmpForNe(tn < xn)
+		}
+		if tn, xn := t.NumParams(), x.NumParams(); tn != xn {
+			return cmpForNe(tn < xn)
+		}
+		if tn, xn := t.NumResults(), x.NumResults(); tn != xn {
+			return cmpForNe(tn < xn)
+		}
+		if tv, xv := t.IsVariadic(), x.IsVariadic(); tv != xv {
+			return cmpForNe(!tv)
+		}
+
+		tfs := t.RecvParamsResults()
+		xfs := x.RecvParamsResults()
+		for i, tf := range tfs {
+			if c := tf.Type.cmp(xfs[i].Type); c != CMPeq {
+				return c
 			}
 		}
 		return CMPeq
@@ -1696,40 +1694,38 @@ func NewInterface(methods []*Field) *Type {
 	return t
 }
 
-const BOGUS_FUNARG_OFFSET = -1000000000
-
-func unzeroFieldOffsets(f []*Field) {
-	for i := range f {
-		f[i].Offset = BOGUS_FUNARG_OFFSET // This will cause an explosion if it is not corrected
-	}
-}
-
 // NewSignature returns a new function type for the given receiver,
 // parameters, and results, any of which may be nil.
 func NewSignature(recv *Field, params, results []*Field) *Type {
-	var recvs []*Field
+	startParams := 0
 	if recv != nil {
-		recvs = []*Field{recv}
+		startParams = 1
 	}
+	startResults := startParams + len(params)
+
+	allParams := make([]*Field, startResults+len(results))
+	if recv != nil {
+		allParams[0] = recv
+	}
+	copy(allParams[startParams:], params)
+	copy(allParams[startResults:], results)
 
 	t := newType(TFUNC)
 	ft := t.funcType()
 
-	funargs := func(fields []*Field, funarg Funarg) *Type {
+	funargs := func(fields []*Field) *Type {
 		s := NewStruct(fields)
-		s.StructType().Funarg = funarg
+		s.StructType().ParamTuple = true
 		return s
 	}
 
-	if recv != nil {
-		recv.Offset = BOGUS_FUNARG_OFFSET
-	}
-	unzeroFieldOffsets(params)
-	unzeroFieldOffsets(results)
-	ft.Receiver = funargs(recvs, FunargRcvr)
-	ft.Params = funargs(params, FunargParams)
-	ft.Results = funargs(results, FunargResults)
-	if fieldsHasShape(recvs) || fieldsHasShape(params) || fieldsHasShape(results) {
+	ft.allParams = allParams
+	ft.startParams = startParams
+	ft.startResults = startResults
+
+	ft.resultsTuple = funargs(allParams[startResults:])
+
+	if fieldsHasShape(allParams) {
 		t.SetHasShape(true)
 	}
 
@@ -1841,39 +1837,34 @@ func IsMethodApplicable(t *Type, m *Field) bool {
 	return t.IsPtr() || !m.Type.Recv().Type.IsPtr() || IsInterfaceMethod(m.Type) || m.Embedded == 2
 }
 
-// IsRuntimePkg reports whether p is package runtime.
-func IsRuntimePkg(p *Pkg) bool {
-	if base.Flag.CompilingRuntime && p == LocalPkg {
-		return true
+// RuntimeSymName returns the name of s if it's in package "runtime"; otherwise
+// it returns "".
+func RuntimeSymName(s *Sym) string {
+	if s.Pkg.Path == "runtime" {
+		return s.Name
 	}
-	return p.Path == "runtime"
+	return ""
 }
 
-// IsReflectPkg reports whether p is package reflect.
-func IsReflectPkg(p *Pkg) bool {
-	return p.Path == "reflect"
+// ReflectSymName returns the name of s if it's in package "reflect"; otherwise
+// it returns "".
+func ReflectSymName(s *Sym) string {
+	if s.Pkg.Path == "reflect" {
+		return s.Name
+	}
+	return ""
 }
 
 // IsNoInstrumentPkg reports whether p is a package that
 // should not be instrumented.
 func IsNoInstrumentPkg(p *Pkg) bool {
-	for _, np := range base.NoInstrumentPkgs {
-		if p.Path == np {
-			return true
-		}
-	}
-	return false
+	return objabi.LookupPkgSpecial(p.Path).NoInstrument
 }
 
 // IsNoRacePkg reports whether p is a package that
 // should not be race instrumented.
 func IsNoRacePkg(p *Pkg) bool {
-	for _, np := range base.NoRacePkgs {
-		if p.Path == np {
-			return true
-		}
-	}
-	return false
+	return objabi.LookupPkgSpecial(p.Path).NoRaceFunc
 }
 
 // ReceiverBaseType returns the underlying type, if any,
