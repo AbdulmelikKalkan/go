@@ -2,17 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build !debugtrace
+package runtime
 
-package inlheur
-
-const debugTrace = 0
-
-func enableDebugTrace(x int) {
-}
-
-func enableDebugTraceIfEnv() {
-}
-
-func disableDebugTrace() {
-}
+func testSPWrite()
