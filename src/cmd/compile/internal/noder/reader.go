@@ -1760,7 +1760,7 @@ func (r *reader) stmt1(tag codeStmt, out *ir.Nodes) ir.Node {
 		op := r.op()
 		lhs := r.expr()
 		pos := r.pos()
-		n := ir.NewAssignOpStmt(pos, op, lhs, ir.NewBasicLit(pos, one))
+		n := ir.NewAssignOpStmt(pos, op, lhs, ir.NewOne(pos, lhs.Type()))
 		n.IncDec = true
 		return n
 
@@ -2176,7 +2176,7 @@ func (r *reader) expr() (res ir.Node) {
 		pos := r.pos()
 		typ := r.typ()
 		val := FixValue(typ, r.Value())
-		return typed(typ, ir.NewBasicLit(pos, val))
+		return ir.NewBasicLit(pos, typ, val)
 
 	case exprNil:
 		pos := r.pos()
@@ -2458,6 +2458,26 @@ func (r *reader) expr() (res ir.Node) {
 		pos := r.pos()
 		typ := r.exprType()
 		return typecheck.Expr(ir.NewUnaryExpr(pos, ir.ONEW, typ))
+
+	case exprSizeof:
+		return ir.NewUintptr(r.pos(), r.typ().Size())
+
+	case exprAlignof:
+		return ir.NewUintptr(r.pos(), r.typ().Alignment())
+
+	case exprOffsetof:
+		pos := r.pos()
+		typ := r.typ()
+		types.CalcSize(typ)
+
+		var offset int64
+		for i := r.Len(); i >= 0; i-- {
+			field := typ.Field(r.Len())
+			offset += field.Offset
+			typ = field.Type
+		}
+
+		return ir.NewUintptr(pos, offset)
 
 	case exprReshape:
 		typ := r.typ()
@@ -3152,7 +3172,7 @@ func (r *reader) exprs() []ir.Node {
 // uintptr-typed word from the dictionary parameter.
 func (r *reader) dictWord(pos src.XPos, idx int) ir.Node {
 	base.AssertfAt(r.dictParam != nil, pos, "expected dictParam in %v", r.curfn)
-	return typecheck.Expr(ir.NewIndexExpr(pos, r.dictParam, ir.NewBasicLit(pos, constant.MakeInt64(int64(idx)))))
+	return typecheck.Expr(ir.NewIndexExpr(pos, r.dictParam, ir.NewInt(pos, int64(idx))))
 }
 
 // rttiWord is like dictWord, but converts it to *byte (the type used
