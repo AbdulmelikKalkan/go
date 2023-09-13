@@ -1340,16 +1340,9 @@ func (r *reader) syntheticArgs(pos src.XPos) (recvs, params ir.Nodes) {
 			// For anonymous and blank parameters, we don't have an *ir.Name
 			// to use as the argument. However, since we know the shaped
 			// function won't use the value either, we can just pass the
-			// zero value. (Also unfortunately, we don't have an easy
-			// zero-value IR node; so we use a default-initialized temporary
-			// variable.)
+			// zero value.
 			if arg == nil {
-				tmp := typecheck.TempAt(pos, r.curfn, param.Type)
-				r.curfn.Body.Append(
-					typecheck.Stmt(ir.NewDecl(pos, ir.ODCL, tmp)),
-					typecheck.Stmt(ir.NewAssignStmt(pos, tmp, nil)),
-				)
-				arg = tmp
+				arg = ir.NewZero(pos, param.Type)
 			}
 
 			out.Append(arg)
@@ -1507,7 +1500,7 @@ func (r *reader) funcargs(fn *ir.Func) {
 	}
 
 	for i, param := range sig.Results() {
-		sym := types.OrigSym(param.Sym)
+		sym := param.Sym
 
 		if sym == nil || sym.IsBlank() {
 			prefix := "~r"
@@ -1536,7 +1529,6 @@ func (r *reader) funcarg(param *types.Field, sym *types.Sym, ctxt ir.Class) {
 
 	if r.inlCall == nil {
 		if !r.funarghack {
-			param.Sym = sym
 			param.Nname = name
 		}
 	} else {
@@ -2178,10 +2170,10 @@ func (r *reader) expr() (res ir.Node) {
 		val := FixValue(typ, r.Value())
 		return ir.NewBasicLit(pos, typ, val)
 
-	case exprNil:
+	case exprZero:
 		pos := r.pos()
 		typ := r.typ()
-		return Nil(pos, typ)
+		return ir.NewZero(pos, typ)
 
 	case exprCompLit:
 		return r.compLit()
