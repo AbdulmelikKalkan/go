@@ -2348,7 +2348,8 @@ type ServeMux struct {
 	mu       sync.RWMutex
 	tree     routingNode
 	index    routingIndex
-	patterns []*pattern // TODO(jba): remove if possible
+	patterns []*pattern  // TODO(jba): remove if possible
+	mux121   serveMux121 // used only when GODEBUG=httpmuxgo121=1
 }
 
 // NewServeMux allocates and returns a new ServeMux.
@@ -2412,6 +2413,9 @@ func stripHostPort(h string) string {
 // If there is no registered handler that applies to the request,
 // Handler returns a “page not found” handler and an empty pattern.
 func (mux *ServeMux) Handler(r *Request) (h Handler, pattern string) {
+	if use121 {
+		return mux.mux121.findHandler(r)
+	}
 	h, p, _, _ := mux.findHandler(r)
 	return h, p
 }
@@ -2585,9 +2589,12 @@ func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
 		w.WriteHeader(StatusBadRequest)
 		return
 	}
-	h, _, pat, matches := mux.findHandler(r)
-	r.pat = pat
-	r.matches = matches
+	var h Handler
+	if use121 {
+		h, _ = mux.mux121.findHandler(r)
+	} else {
+		h, _, r.pat, r.matches = mux.findHandler(r)
+	}
 	h.ServeHTTP(w, r)
 }
 
@@ -2597,23 +2604,35 @@ func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
 // Handle registers the handler for the given pattern.
 // If a handler already exists for pattern, Handle panics.
 func (mux *ServeMux) Handle(pattern string, handler Handler) {
+	if use121 {
+		mux.mux121.handle(pattern, handler)
+	}
 	mux.register(pattern, handler)
 }
 
 // HandleFunc registers the handler function for the given pattern.
 func (mux *ServeMux) HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
+	if use121 {
+		mux.mux121.handleFunc(pattern, handler)
+	}
 	mux.register(pattern, HandlerFunc(handler))
 }
 
 // Handle registers the handler for the given pattern in [DefaultServeMux].
 // The documentation for [ServeMux] explains how patterns are matched.
 func Handle(pattern string, handler Handler) {
+	if use121 {
+		DefaultServeMux.mux121.handle(pattern, handler)
+	}
 	DefaultServeMux.register(pattern, handler)
 }
 
 // HandleFunc registers the handler function for the given pattern in [DefaultServeMux].
 // The documentation for [ServeMux] explains how patterns are matched.
 func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
+	if use121 {
+		DefaultServeMux.mux121.handleFunc(pattern, handler)
+	}
 	DefaultServeMux.register(pattern, HandlerFunc(handler))
 }
 
