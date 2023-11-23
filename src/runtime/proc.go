@@ -2428,8 +2428,20 @@ func dropm() {
 	// Flush all the M's buffers. This is necessary because the M might
 	// be used on a different thread with a different procid, so we have
 	// to make sure we don't write into the same buffer.
-	if traceEnabled() || traceShuttingDown() {
+	//
+	// N.B. traceThreadDestroy is a no-op in the old tracer, so avoid the
+	// unnecessary acquire/release of the lock.
+	if goexperiment.ExecTracer2 && (traceEnabled() || traceShuttingDown()) {
+		// Acquire sched.lock across thread destruction. One of the invariants of the tracer
+		// is that a thread cannot disappear from the tracer's view (allm or freem) without
+		// it noticing, so it requires that sched.lock be held over traceThreadDestroy.
+		//
+		// This isn't strictly necessary in this case, because this thread never leaves allm,
+		// but the critical section is short and dropm is rare on pthread platforms, so just
+		// take the lock and play it safe. traceThreadDestroy also asserts that the lock is held.
+		lock(&sched.lock)
 		traceThreadDestroy(mp)
+		unlock(&sched.lock)
 	}
 	mp.isExtraInSig = false
 
@@ -5757,15 +5769,23 @@ func wirep(pp *p) {
 	gp := getg()
 
 	if gp.m.p != 0 {
-		throw("wirep: already in go")
+		// Call on the systemstack to avoid a nosplit overflow build failure
+		// on some platforms when built with -N -l. See #64113.
+		systemstack(func() {
+			throw("wirep: already in go")
+		})
 	}
 	if pp.m != 0 || pp.status != _Pidle {
-		id := int64(0)
-		if pp.m != 0 {
-			id = pp.m.ptr().id
-		}
-		print("wirep: p->m=", pp.m, "(", id, ") p->status=", pp.status, "\n")
-		throw("wirep: invalid p state")
+		// Call on the systemstack to avoid a nosplit overflow build failure
+		// on some platforms when built with -N -l. See #64113.
+		systemstack(func() {
+			id := int64(0)
+			if pp.m != 0 {
+				id = pp.m.ptr().id
+			}
+			print("wirep: p->m=", pp.m, "(", id, ") p->status=", pp.status, "\n")
+			throw("wirep: invalid p state")
+		})
 	}
 	gp.m.p.set(pp)
 	pp.m.set(gp.m)
