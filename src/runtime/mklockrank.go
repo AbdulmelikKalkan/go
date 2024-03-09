@@ -56,15 +56,12 @@ NONE <
 NONE < testR, testW;
 
 # Scheduler, timers, netpoll
-NONE <
-  allocmW,
-  execW,
-  cpuprof,
-  pollDesc,
-  wakeableSleep;
+NONE < allocmW, execW, cpuprof, pollDesc, wakeableSleep;
+scavenge, sweep, testR, wakeableSleep < hchan;
 assistQueue,
   cpuprof,
   forcegc,
+  hchan,
   pollDesc, # pollDesc can interact with timers, which can lock sched.
   scavenge,
   sweep,
@@ -78,12 +75,10 @@ assistQueue,
   execR
 < sched;
 sched < allg, allp;
-allp, wakeableSleep < timers;
-timers < netpollInit;
-timers < timer;
+hchan, pollDesc, wakeableSleep < timers;
+timers < timer < netpollInit;
 
 # Channels
-scavenge, sweep, testR, wakeableSleep < hchan;
 NONE < notifyList;
 hchan, notifyList < sudog;
 
@@ -112,12 +107,13 @@ traceBuf < traceStrings;
 # Malloc
 allg,
   allocmR,
+  allp, # procresize
   execR, # May grow stack
   execW, # May allocate after BeforeFork
   hchan,
   notifyList,
   reflectOffs,
-  timers,
+  timer,
   traceStrings,
   userArenaState
 # Above MALLOC are things that can allocate memory.
