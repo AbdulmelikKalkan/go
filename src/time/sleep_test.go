@@ -63,7 +63,7 @@ func TestSleep(t *testing.T) {
 	start := Now()
 	Sleep(delay)
 	delayadj := adjustDelay(t, delay)
-	duration := Now().Sub(start)
+	duration := Since(start)
 	if duration < delayadj {
 		t.Fatalf("Sleep(%s) slept for only %s", delay, duration)
 	}
@@ -322,7 +322,7 @@ func TestAfter(t *testing.T) {
 	start := Now()
 	end := <-After(delay)
 	delayadj := adjustDelay(t, delay)
-	if duration := Now().Sub(start); duration < delayadj {
+	if duration := Since(start); duration < delayadj {
 		t.Fatalf("After(%s) slept for only %d ns", delay, duration)
 	}
 	if min := start.Add(delayadj); end.Before(min) {
@@ -655,6 +655,13 @@ func TestZeroTimer(t *testing.T) {
 	})
 	t.Run("impl=func", func(t *testing.T) {
 		testZeroTimer(t, newTimerFunc)
+	})
+	t.Run("impl=cache", func(t *testing.T) {
+		timer := newTimerFunc(Hour)
+		testZeroTimer(t, func(d Duration) *Timer {
+			timer.Reset(d)
+			return timer
+		})
 	})
 }
 
