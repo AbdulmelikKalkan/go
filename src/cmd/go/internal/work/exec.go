@@ -1140,13 +1140,15 @@ type vetConfig struct {
 	NonGoFiles   []string // absolute paths to package non-Go files
 	IgnoredFiles []string // absolute paths to ignored source files
 
-	ImportMap   map[string]string // map import path in source code to package path
-	PackageFile map[string]string // map package path to .a file with export data
-	Standard    map[string]bool   // map package path to whether it's in the standard library
-	PackageVetx map[string]string // map package path to vetx data from earlier vet run
-	VetxOnly    bool              // only compute vetx data; don't report detected problems
-	VetxOutput  string            // write vetx data to this output file
-	GoVersion   string            // Go version for package
+	ModulePath    string            // module path (may be "" on module error)
+	ModuleVersion string            // module version (may be "" on main module or module error)
+	ImportMap     map[string]string // map import path in source code to package path
+	PackageFile   map[string]string // map package path to .a file with export data
+	Standard      map[string]bool   // map package path to whether it's in the standard library
+	PackageVetx   map[string]string // map package path to vetx data from earlier vet run
+	VetxOnly      bool              // only compute vetx data; don't report detected problems
+	VetxOutput    string            // write vetx data to this output file
+	GoVersion     string            // Go version for package
 
 	SucceedOnTypecheckFailure bool // awful hack; see #18395 and below
 }
@@ -1187,6 +1189,11 @@ func buildVetConfig(a *Action, srcfiles []string) {
 			v = gover.DefaultGoModVersion
 		}
 		vcfg.GoVersion = "go" + v
+
+		if a.Package.Module.Error == nil {
+			vcfg.ModulePath = a.Package.Module.Path
+			vcfg.ModuleVersion = a.Package.Module.Version
+		}
 	}
 	a.vetCfg = vcfg
 	for i, raw := range a.Package.Internal.RawImports {
@@ -2812,7 +2819,10 @@ func (b *Builder) cgo(a *Action, cgoExe, objdir string, pcCFLAGS, pcLDFLAGS, cgo
 		cgoflags = append(cgoflags, "-import_syscall=false")
 	}
 
-	// Update $CGO_LDFLAGS with p.CgoLDFLAGS.
+	// cgoLDFLAGS, which includes p.CgoLDFLAGS, can be very long.
+	// Pass it to cgo on the command line, so that we use a
+	// response file if necessary.
+	//
 	// These flags are recorded in the generated _cgo_gotypes.go file
 	// using //go:cgo_ldflag directives, the compiler records them in the
 	// object file for the package, and then the Go linker passes them
@@ -2820,12 +2830,16 @@ func (b *Builder) cgo(a *Action, cgoExe, objdir string, pcCFLAGS, pcLDFLAGS, cgo
 	// consists of the original $CGO_LDFLAGS (unchecked) and all the
 	// flags put together from source code (checked).
 	cgoenv := b.cCompilerEnv()
+	var ldflagsOption []string
 	if len(cgoLDFLAGS) > 0 {
 		flags := make([]string, len(cgoLDFLAGS))
 		for i, f := range cgoLDFLAGS {
 			flags[i] = strconv.Quote(f)
 		}
-		cgoenv = append(cgoenv, "CGO_LDFLAGS="+strings.Join(flags, " "))
+		ldflagsOption = []string{"-ldflags=" + strings.Join(flags, " ")}
+
+		// Remove CGO_LDFLAGS from the environment.
+		cgoenv = append(cgoenv, "CGO_LDFLAGS=")
 	}
 
 	if cfg.BuildToolchainName == "gccgo" {
@@ -2863,7 +2877,7 @@ func (b *Builder) cgo(a *Action, cgoExe, objdir string, pcCFLAGS, pcLDFLAGS, cgo
 		cgoflags = append(cgoflags, "-trimpath", strings.Join(trimpath, ";"))
 	}
 
-	if err := sh.run(p.Dir, p.ImportPath, cgoenv, cfg.BuildToolexec, cgoExe, "-objdir", objdir, "-importpath", p.ImportPath, cgoflags, "--", cgoCPPFLAGS, cgoCFLAGS, cgofiles); err != nil {
+	if err := sh.run(p.Dir, p.ImportPath, cgoenv, cfg.BuildToolexec, cgoExe, "-objdir", objdir, "-importpath", p.ImportPath, cgoflags, ldflagsOption, "--", cgoCPPFLAGS, cgoCFLAGS, cgofiles); err != nil {
 		return nil, nil, err
 	}
 	outGo = append(outGo, gofiles...)
