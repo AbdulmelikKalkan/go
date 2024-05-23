@@ -179,6 +179,35 @@ Previous versions default to `winreadlinkvolume=0`.
 Go 1.23 corrected the semantics of contention reports for runtime-internal locks,
 and so removed the [`runtimecontentionstacks` setting](/pkg/runtime#hdr-Environment_Variable).
 
+Go 1.23 enabled the experimental post-quantum key exchange mechanism
+X25519Kyber768Draft00 by default. The default can be reverted using the
+[`tlskyber` setting](/pkg/crypto/tls/#Config.CurvePreferences).
+
+Go 1.23 changed the behavior of
+[crypto/x509.ParseCertificate](/pkg/crypto/x509/#ParseCertificate) to reject
+serial numbers that are negative. This change can be reverted with
+the [`x509negativeserial` setting](/pkg/crypto/x509/#ParseCertificate).
+
+Go 1.23 changed the behavior of
+[crypto/x509.ParseCertificate](/pkg/crypto/x509/#ParseCertificate) to reject
+serial numbers that are longer than 20 octets. This change can be reverted with
+the [`x509seriallength` setting](/pkg/crypto/x509/#ParseCertificate).
+
+Go 1.23 re-enabled support in html/template for ECMAScript 6 template literals by default.
+The [`jstmpllitinterp` setting](/pkg/html/template#hdr-Security_Model) no longer has
+any effect.
+
+Go 1.23 changed the default TLS cipher suites used by clients and servers when
+not explicitly configured, removing 3DES cipher suites. The default can be reverted
+using the [`tls3des` setting](/pkg/crypto/tls/#Config.CipherSuites).
+
+Go 1.23 changed the behavior of [`tls.X509KeyPair`](/pkg/crypto/tls#X509KeyPair)
+and [`tls.LoadX509KeyPair`](/pkg/crypto/tls#LoadX509KeyPair) to populate the
+Leaf field of the returned [`tls.Certificate`](/pkg/crypto/tls#Certificate).
+This behavior is controlled by the `x509keypairleaf` setting. For Go 1.23, it
+defaults to `x509keypairleaf=1`. Previous versions default to
+`x509keypairleaf=0`.
+
 ### Go 1.22
 
 Go 1.22 adds a configurable limit to control the maximum acceptable RSA key size
