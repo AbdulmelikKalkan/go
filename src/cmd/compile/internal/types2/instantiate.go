@@ -11,6 +11,7 @@ import (
 	"cmd/compile/internal/syntax"
 	"errors"
 	"fmt"
+	"internal/buildcfg"
 	. "internal/types/errors"
 )
 
@@ -126,8 +127,9 @@ func (check *Checker) instance(pos syntax.Pos, orig genericType, targs []Type, e
 		res = check.newNamedInstance(pos, orig, targs, expanding) // substituted lazily
 
 	case *Alias:
-		// TODO(gri) is this correct?
-		assert(expanding == nil) // Alias instances cannot be reached from Named types
+		if !buildcfg.Experiment.AliasTypeParams {
+			assert(expanding == nil) // Alias instances cannot be reached from Named types
+		}
 
 		tparams := orig.TypeParams()
 		// TODO(gri) investigate if this is needed (type argument and parameter count seem to be correct here)
@@ -138,7 +140,7 @@ func (check *Checker) instance(pos syntax.Pos, orig genericType, targs []Type, e
 			return orig // nothing to do (minor optimization)
 		}
 
-		return check.newAliasInstance(pos, orig, targs, ctxt)
+		return check.newAliasInstance(pos, orig, targs, expanding, ctxt)
 
 	case *Signature:
 		assert(expanding == nil) // function instances cannot be reached from Named types
@@ -286,12 +288,12 @@ func (check *Checker) implements(pos syntax.Pos, V, T Type, constraint bool, cau
 		}
 		// If T is comparable, V must be comparable.
 		// If V is strictly comparable, we're done.
-		if comparable(V, false /* strict comparability */, nil, nil) {
+		if comparableType(V, false /* strict comparability */, nil, nil) {
 			return true
 		}
 		// For constraint satisfaction, use dynamic (spec) comparability
 		// so that ordinary, non-type parameter interfaces implement comparable.
-		if constraint && comparable(V, true /* spec comparability */, nil, nil) {
+		if constraint && comparableType(V, true /* spec comparability */, nil, nil) {
 			// V is comparable if we are at Go 1.20 or higher.
 			if check == nil || check.allowVersion(atPos(pos), go1_20) { // atPos needed so that go/types generate passes
 				return true
