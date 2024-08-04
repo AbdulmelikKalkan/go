@@ -210,21 +210,22 @@ const (
 	C_DCON    // other 64 (could subdivide further)
 	C_SACON   // $n(REG) where n <= int12
 	C_LACON   // $n(REG) where int12 < n <= int32
-	C_EXTADDR // external symbol address
 	C_DACON   // $n(REG) where int32 < n
+	C_EXTADDR // external symbol address
 	C_BRAN
 	C_SAUTO
 	C_LAUTO
 	C_ZOREG
 	C_SOREG
 	C_LOREG
-	C_GOK
+	C_ROFF // register offset
 	C_ADDR
 	C_TLS_LE
 	C_TLS_IE
 	C_GOTADDR
 	C_TEXTSIZE
 
+	C_GOK
 	C_NCLASS // must be the last
 )
 
@@ -439,6 +440,48 @@ const (
 	ARDTIMEHW
 	ARDTIMED
 	ACPUCFG
+
+	// 3.2.1.3
+	AFMINF
+	AFMIND
+	AFMAXF
+	AFMAXD
+
+	// 3.2.1.7
+	AFCOPYSGF
+	AFCOPYSGD
+
+	// 3.2.1.8
+	AFCLASSF
+	AFCLASSD
+
+	// 3.2.3.2
+	AFFINTFW
+	AFFINTFV
+	AFFINTDW
+	AFFINTDV
+	AFTINTWF
+	AFTINTWD
+	AFTINTVF
+	AFTINTVD
+
+	// 3.2.3.3
+	AFTINTRPWF
+	AFTINTRPWD
+	AFTINTRPVF
+	AFTINTRPVD
+	AFTINTRMWF
+	AFTINTRMWD
+	AFTINTRMVF
+	AFTINTRMVD
+	AFTINTRZWF
+	AFTINTRZWD
+	AFTINTRZVF
+	AFTINTRZVD
+	AFTINTRNEWF
+	AFTINTRNEWD
+	AFTINTRNEVF
+	AFTINTRNEVD
 
 	ALAST
 
