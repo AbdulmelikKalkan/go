@@ -85,6 +85,8 @@ var optab = []Optab{
 	{AADDF, C_FREG, C_NONE, C_NONE, C_FREG, C_NONE, 2, 4, 0, 0},
 	{AADDF, C_FREG, C_FREG, C_NONE, C_FREG, C_NONE, 2, 4, 0, 0},
 	{ACMPEQF, C_FREG, C_FREG, C_NONE, C_FCCREG, C_NONE, 2, 4, 0, 0},
+	{AVSEQB, C_VREG, C_VREG, C_NONE, C_VREG, C_NONE, 2, 4, 0, 0},
+	{AXVSEQB, C_XREG, C_XREG, C_NONE, C_XREG, C_NONE, 2, 4, 0, 0},
 
 	{ACLOW, C_REG, C_NONE, C_NONE, C_REG, C_NONE, 9, 4, 0, 0},
 	{AABSF, C_FREG, C_NONE, C_NONE, C_FREG, C_NONE, 9, 4, 0, 0},
@@ -105,6 +107,10 @@ var optab = []Optab{
 	{AMOVV, C_REG, C_NONE, C_NONE, C_SOREG, C_NONE, 7, 4, REGZERO, 0},
 	{AMOVB, C_REG, C_NONE, C_NONE, C_SOREG, C_NONE, 7, 4, REGZERO, 0},
 	{AMOVBU, C_REG, C_NONE, C_NONE, C_SOREG, C_NONE, 7, 4, REGZERO, 0},
+	{AVMOVQ, C_VREG, C_NONE, C_NONE, C_SOREG, C_NONE, 7, 4, REGZERO, 0},
+	{AXVMOVQ, C_XREG, C_NONE, C_NONE, C_SOREG, C_NONE, 7, 4, REGZERO, 0},
+	{AVMOVQ, C_VREG, C_NONE, C_NONE, C_SAUTO, C_NONE, 7, 4, REGZERO, 0},
+	{AXVMOVQ, C_XREG, C_NONE, C_NONE, C_SAUTO, C_NONE, 7, 4, REGZERO, 0},
 	{ASC, C_REG, C_NONE, C_NONE, C_SOREG, C_NONE, 7, 4, REGZERO, 0},
 	{ASCV, C_REG, C_NONE, C_NONE, C_SOREG, C_NONE, 7, 4, REGZERO, 0},
 
@@ -118,6 +124,10 @@ var optab = []Optab{
 	{AMOVV, C_SOREG, C_NONE, C_NONE, C_REG, C_NONE, 8, 4, REGZERO, 0},
 	{AMOVB, C_SOREG, C_NONE, C_NONE, C_REG, C_NONE, 8, 4, REGZERO, 0},
 	{AMOVBU, C_SOREG, C_NONE, C_NONE, C_REG, C_NONE, 8, 4, REGZERO, 0},
+	{AVMOVQ, C_SOREG, C_NONE, C_NONE, C_VREG, C_NONE, 8, 4, REGZERO, 0},
+	{AXVMOVQ, C_SOREG, C_NONE, C_NONE, C_XREG, C_NONE, 8, 4, REGZERO, 0},
+	{AVMOVQ, C_SAUTO, C_NONE, C_NONE, C_VREG, C_NONE, 8, 4, REGZERO, 0},
+	{AXVMOVQ, C_SAUTO, C_NONE, C_NONE, C_XREG, C_NONE, 8, 4, REGZERO, 0},
 	{ALL, C_SOREG, C_NONE, C_NONE, C_REG, C_NONE, 8, 4, REGZERO, 0},
 	{ALLV, C_SOREG, C_NONE, C_NONE, C_REG, C_NONE, 8, 4, REGZERO, 0},
 
@@ -306,6 +316,8 @@ var optab = []Optab{
 	{AMOVV, C_REG, C_NONE, C_NONE, C_ROFF, C_NONE, 20, 4, 0, 0},
 	{AMOVF, C_FREG, C_NONE, C_NONE, C_ROFF, C_NONE, 20, 4, 0, 0},
 	{AMOVD, C_FREG, C_NONE, C_NONE, C_ROFF, C_NONE, 20, 4, 0, 0},
+	{AVMOVQ, C_VREG, C_NONE, C_NONE, C_ROFF, C_NONE, 20, 4, 0, 0},
+	{AXVMOVQ, C_XREG, C_NONE, C_NONE, C_ROFF, C_NONE, 20, 4, 0, 0},
 
 	/* load with extended register offset */
 	{AMOVB, C_ROFF, C_NONE, C_NONE, C_REG, C_NONE, 21, 4, 0, 0},
@@ -315,6 +327,8 @@ var optab = []Optab{
 	{AMOVV, C_ROFF, C_NONE, C_NONE, C_REG, C_NONE, 21, 4, 0, 0},
 	{AMOVF, C_ROFF, C_NONE, C_NONE, C_FREG, C_NONE, 21, 4, 0, 0},
 	{AMOVD, C_ROFF, C_NONE, C_NONE, C_FREG, C_NONE, 21, 4, 0, 0},
+	{AVMOVQ, C_ROFF, C_NONE, C_NONE, C_VREG, C_NONE, 21, 4, 0, 0},
+	{AXVMOVQ, C_ROFF, C_NONE, C_NONE, C_XREG, C_NONE, 21, 4, 0, 0},
 
 	{obj.APCALIGN, C_SCON, C_NONE, C_NONE, C_NONE, C_NONE, 0, 0, 0, 0},
 	{obj.APCDATA, C_LCON, C_NONE, C_NONE, C_LCON, C_NONE, 0, 0, 0, 0},
@@ -812,6 +826,10 @@ func (c *ctxt0) rclass(r int16) int {
 		return C_FCCREG
 	case REG_FCSR0 <= r && r <= REG_FCSR3:
 		return C_FCSRREG
+	case REG_V0 <= r && r <= REG_V31:
+		return C_VREG
+	case REG_X0 <= r && r <= REG_X31:
+		return C_XREG
 	}
 
 	return C_GOK
@@ -1199,6 +1217,8 @@ func buildop(ctxt *obj.Link) {
 			AJAL,
 			AJMP,
 			AMOVWU,
+			AVMOVQ,
+			AXVMOVQ,
 			ALL,
 			ALLV,
 			ASC,
@@ -1265,6 +1285,15 @@ func buildop(ctxt *obj.Link) {
 				}
 				opset(i, r0)
 			}
+		case AVSEQB:
+			opset(AVSEQH, r0)
+			opset(AVSEQW, r0)
+			opset(AVSEQV, r0)
+
+		case AXVSEQB:
+			opset(AXVSEQH, r0)
+			opset(AXVSEQW, r0)
+			opset(AXVSEQV, r0)
 		}
 	}
 }
@@ -2099,6 +2128,30 @@ func (c *ctxt0) oprrr(a obj.As) uint32 {
 		return 0x07070 << 15 // fstx.s
 	case AMOVD:
 		return 0x07078 << 15 // fstx.d
+	case -AVMOVQ:
+		return 0x07080 << 15 // vldx
+	case -AXVMOVQ:
+		return 0x07090 << 15 // xvldx
+	case AVMOVQ:
+		return 0x07088 << 15 // vstx
+	case AXVMOVQ:
+		return 0x07098 << 15 // xvstx
+	case AVSEQB:
+		return 0x0e000 << 15 // vseq.b
+	case AXVSEQB:
+		return 0x0e800 << 15 // xvseq.b
+	case AVSEQH:
+		return 0x0e001 << 15 // vseq.h
+	case AXVSEQH:
+		return 0x0e801 << 15 // xvseq.h
+	case AVSEQW:
+		return 0x0e002 << 15 // vseq.w
+	case AXVSEQW:
+		return 0x0e802 << 15 // xvseq.w
+	case AVSEQV:
+		return 0x0e003 << 15 // vseq.d
+	case AXVSEQV:
+		return 0x0e803 << 15 // xvseq.d
 	}
 
 	if a < 0 {
@@ -2386,7 +2439,14 @@ func (c *ctxt0) opirr(a obj.As) uint32 {
 		return 0x0ac << 22
 	case -AMOVD:
 		return 0x0ae << 22
-
+	case -AVMOVQ:
+		return 0x0b0 << 22 // vld
+	case -AXVMOVQ:
+		return 0x0b2 << 22 // xvld
+	case AVMOVQ:
+		return 0x0b1 << 22 // vst
+	case AXVMOVQ:
+		return 0x0b3 << 22 // xvst
 	case ASLLV:
 		return 0x0041 << 16
 	case ASRLV:
