@@ -480,7 +480,7 @@ func (d *dwctxt) dotypedef(parent *dwarf.DWDie, name string, def *dwarf.DWDie) *
 		return nil
 	}
 	if def == nil {
-		Errorf(nil, "dwarf: bad def in dotypedef")
+		Errorf("dwarf: bad def in dotypedef")
 	}
 
 	// Create a new loader symbol for the typedef. We no longer
@@ -1965,8 +1965,9 @@ func dwarfGenerateDebugInfo(ctxt *Link) {
 			continue
 		}
 		t := d.ldr.SymType(idx)
-		switch t {
-		case sym.SRODATA, sym.SDATA, sym.SNOPTRDATA, sym.STYPE, sym.SBSS, sym.SNOPTRBSS, sym.STLSBSS:
+		switch {
+		case t.IsRODATA(), t.IsDATA(), t.IsNOPTRDATA(),
+			t == sym.STYPE, t == sym.SBSS, t == sym.SNOPTRBSS, t == sym.STLSBSS:
 			// ok
 		default:
 			continue
