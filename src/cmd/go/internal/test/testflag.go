@@ -26,13 +26,14 @@ import (
 // some are for both.
 
 func init() {
-	work.AddBuildFlags(CmdTest, work.OmitVFlag)
+	work.AddBuildFlags(CmdTest, work.OmitVFlag|work.OmitJSONFlag)
 
 	cf := CmdTest.Flag
 	cf.BoolVar(&testC, "c", false, "")
 	cf.StringVar(&testO, "o", "", "")
 	work.AddCoverFlags(CmdTest, &testCoverProfile)
 	cf.Var((*base.StringsFlag)(&work.ExecCmd), "exec", "")
+	// TODO(austin): Make test -json imply build -json.
 	cf.BoolVar(&testJSON, "json", false, "")
 	cf.Var(&testVet, "vet", "")
 
@@ -352,6 +353,9 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 		injectedFlags = append(injectedFlags, "-test.v=test2json")
 		delete(addFromGOFLAGS, "v")
 		delete(addFromGOFLAGS, "test.v")
+
+		// TODO(austin,#70402): Re-enable this once LUCI can handle build JSON in the test stream.
+		//cfg.BuildJSON = true
 	}
 
 	// Inject flags from GOFLAGS before the explicit command-line arguments.
