@@ -11,6 +11,7 @@
 package fsys
 
 import (
+	"cmd/go/internal/str"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -88,26 +89,46 @@ type overlayJSON struct {
 	Replace map[string]string
 }
 
+// overlay is a list of replacements to be applied, sorted by cmp of the from field.
+// cmp sorts the filepath.Separator less than any other byte so that x is always
+// just before any children x/a, x/b, and so on, before x.go. (This would not
+// be the case with byte-wise sorting, which would produce x, x.go, x/a.)
+// The sorting lets us find the relevant overlay entry quickly even if it is for a
+// parent of the path being searched.
+var overlay []replace
+
+// A replace represents a single replaced path.
 type replace struct {
+	// from is the old path being replaced.
+	// It is an absolute path returned by abs.
 	from string
-	to   string
+
+	// to is the replacement for the old path.
+	// It is an absolute path returned by abs.
+	// If it is the empty string, the old path appears deleted.
+	// Otherwise the old path appears to be the file named by to.
+	// If to ends in a trailing slash, the overlay code below treats
+	// it as a directory replacement, akin to a bind mount.
+	// However, our processing of external overlay maps removes
+	// such paths by calling abs, except for / or C:\.
+	to string
 }
 
-type node struct {
-	actual   string           // empty if a directory
-	children map[string]*node // path element → file or directory
-}
+var binds []replace
 
-func (n *node) isDir() bool {
-	return n.actual == "" && n.children != nil
+// Bind makes the virtual file system use dir as if it were mounted at mtpt,
+// like Plan 9's “bind” or Linux's “mount --bind”, or like os.Symlink
+// but without the symbolic link.
+//
+// For now, the behavior of using Bind on multiple overlapping
+// mountpoints (for example Bind("x", "/a") and Bind("y", "/a/b"))
+// is undefined.
+func Bind(dir, mtpt string) {
+	if dir == "" || mtpt == "" {
+		panic("Bind of empty directory")
+	}
+	binds = append(binds, replace{abs(mtpt), abs(dir)})
 }
-
-func (n *node) isDeleted() bool {
-	return n.actual == "" && n.children == nil
-}
-
-// TODO(matloob): encapsulate these in an io/fs-like interface
-var overlay map[string]*node // path -> file or directory node
 
 // cwd returns the current directory, caching it on first use.
 var cwd = sync.OnceValue(cwdOnce)
@@ -143,67 +164,175 @@ func abs(path string) string {
 	return filepath.Join(dir, path)
 }
 
+func searchcmp(r replace, t string) int {
+	return cmp(r.from, t)
+}
+
 // info is a summary of the known information about a path
 // being looked up in the virtual file system.
 type info struct {
 	abs      string
 	deleted  bool
 	replaced bool
-	dir      bool
+	dir      bool // must be dir
+	file     bool // must be file
 	actual   string
 }
 
 // stat returns info about the path in the virtual file system.
 func stat(path string) info {
 	apath := abs(path)
-	if n, ok := overlay[apath]; ok {
-		if n.isDir() {
+	if path == "" {
+		return info{abs: apath, actual: path}
+	}
+
+	// Apply bind replacements before applying overlay.
+	replaced := false
+	for _, r := range binds {
+		if str.HasFilePathPrefix(apath, r.from) {
+			// apath is below r.from.
+			// Replace prefix with r.to and fall through to overlay.
+			apath = r.to + apath[len(r.from):]
+			path = apath
+			replaced = true
+			break
+		}
+		if str.HasFilePathPrefix(r.from, apath) {
+			// apath is above r.from.
+			// Synthesize a directory in case one does not exist.
 			return info{abs: apath, replaced: true, dir: true, actual: path}
 		}
-		if n.isDeleted() {
+	}
+
+	// Binary search for apath to find the nearest relevant entry in the overlay.
+	i, ok := slices.BinarySearchFunc(overlay, apath, searchcmp)
+	if ok {
+		// Exact match; overlay[i].from == apath.
+		r := overlay[i]
+		if r.to == "" {
+			// Deleted.
 			return info{abs: apath, deleted: true}
 		}
-		return info{abs: apath, replaced: true, actual: n.actual}
-	}
-
-	// Check whether any parents are replaced by files,
-	// meaning this path and the directory that contained it
-	// have been deleted.
-	prefix := apath
-	for {
-		if n, ok := overlay[prefix]; ok {
-			if n.children == nil {
-				return info{abs: apath, deleted: true}
-			}
-			break
+		if strings.HasSuffix(r.to, string(filepath.Separator)) {
+			// Replacement ends in slash, denoting directory.
+			// Note that this is impossible in current overlays since we call abs
+			// and it strips the trailing slashes. But we could support it in the future.
+			return info{abs: apath, replaced: true, dir: true, actual: path}
 		}
-		parent := filepath.Dir(prefix)
-		if parent == prefix {
-			break
-		}
-		prefix = parent
+		// Replaced file.
+		return info{abs: apath, replaced: true, file: true, actual: r.to}
 	}
-
-	return info{abs: apath, actual: path}
+	if i < len(overlay) && str.HasFilePathPrefix(overlay[i].from, apath) {
+		// Replacement for child path; infer existence of parent directory.
+		return info{abs: apath, replaced: true, dir: true, actual: path}
+	}
+	if i > 0 && str.HasFilePathPrefix(apath, overlay[i-1].from) {
+		// Replacement for parent.
+		r := overlay[i-1]
+		if strings.HasSuffix(r.to, string(filepath.Separator)) {
+			// Parent replaced by directory; apply replacement in our path.
+			// Note that this is impossible in current overlays since we call abs
+			// and it strips the trailing slashes. But we could support it in the future.
+			p := r.to + apath[len(r.from)+1:]
+			return info{abs: apath, replaced: true, actual: p}
+		}
+		// Parent replaced by file; path is deleted.
+		return info{abs: apath, deleted: true}
+	}
+	return info{abs: apath, replaced: replaced, actual: path}
 }
 
 // children returns a sequence of (name, info)
-// for all the children of the directory i.
+// for all the children of the directory i
+// implied by the overlay.
 func (i *info) children() iter.Seq2[string, info] {
 	return func(yield func(string, info) bool) {
-		n := overlay[i.abs]
-		if n == nil {
-			return
+		// Build list of directory children implied by the binds.
+		// Binds are not sorted, so just loop over them.
+		var dirs []string
+		for _, m := range binds {
+			if str.HasFilePathPrefix(m.from, i.abs) && m.from != i.abs {
+				name := m.from[len(i.abs)+1:]
+				if i := strings.IndexByte(name, filepath.Separator); i >= 0 {
+					name = name[:i]
+				}
+				dirs = append(dirs, name)
+			}
 		}
-		for name, c := range n.children {
+		if len(dirs) > 1 {
+			slices.Sort(dirs)
+			str.Uniq(&dirs)
+		}
+
+		// Loop looking for next possible child in sorted overlay,
+		// which is previous child plus "\x00".
+		target := i.abs + string(filepath.Separator) + "\x00"
+		for {
+			// Search for next child: first entry in overlay >= target.
+			j, _ := slices.BinarySearchFunc(overlay, target, func(r replace, t string) int {
+				return cmp(r.from, t)
+			})
+
+		Loop:
+			// Skip subdirectories with deleted children (but not direct deleted children).
+			for j < len(overlay) && overlay[j].to == "" && str.HasFilePathPrefix(overlay[j].from, i.abs) && strings.Contains(overlay[j].from[len(i.abs)+1:], string(filepath.Separator)) {
+				j++
+			}
+			if j >= len(overlay) {
+				// Nothing found at all.
+				break
+			}
+			r := overlay[j]
+			if !str.HasFilePathPrefix(r.from, i.abs) {
+				// Next entry in overlay is beyond the directory we want; all done.
+				break
+			}
+
+			// Found the next child in the directory.
+			// Yield it and its info.
+			name := r.from[len(i.abs)+1:]
+			actual := r.to
+			dir := false
+			if j := strings.IndexByte(name, filepath.Separator); j >= 0 {
+				// Child is multiple levels down, so name must be a directory,
+				// and there is no actual replacement.
+				name = name[:j]
+				dir = true
+				actual = ""
+			}
+			deleted := !dir && r.to == ""
 			ci := info{
 				abs:      filepath.Join(i.abs, name),
-				deleted:  c.isDeleted(),
-				replaced: c.children != nil || c.actual != "",
-				dir:      c.isDir(),
-				actual:   c.actual,
+				deleted:  deleted,
+				replaced: !deleted,
+				dir:      dir || strings.HasSuffix(r.to, string(filepath.Separator)),
+				actual:   actual,
+			}
+			for ; len(dirs) > 0 && dirs[0] < name; dirs = dirs[1:] {
+				if !yield(dirs[0], info{abs: filepath.Join(i.abs, dirs[0]), replaced: true, dir: true}) {
+					return
+				}
+			}
+			if len(dirs) > 0 && dirs[0] == name {
+				dirs = dirs[1:]
 			}
 			if !yield(name, ci) {
+				return
+			}
+
+			// Next target is first name after the one we just returned.
+			target = ci.abs + "\x00"
+
+			// Optimization: Check whether the very next element
+			// is the next child. If so, skip the binary search.
+			if j+1 < len(overlay) && cmp(overlay[j+1].from, target) >= 0 {
+				j++
+				goto Loop
+			}
+		}
+
+		for _, dir := range dirs {
+			if !yield(dir, info{abs: filepath.Join(i.abs, dir), replaced: true, dir: true}) {
 				return
 			}
 		}
@@ -246,7 +375,7 @@ func initFromJSON(js []byte) error {
 			return fmt.Errorf("duplicate paths %s and %s in overlay map", old, from)
 		}
 		seen[afrom] = from
-		list = append(list, replace{from: afrom, to: ojs.Replace[from]})
+		list = append(list, replace{from: afrom, to: abs(ojs.Replace[from])})
 	}
 
 	slices.SortFunc(list, func(x, y replace) int { return cmp(x.from, y.from) })
@@ -268,39 +397,7 @@ func initFromJSON(js []byte) error {
 		}
 	}
 
-	overlay = make(map[string]*node)
-	for _, r := range list {
-		n := &node{actual: abs(r.to)}
-		from := r.from
-		overlay[from] = n
-
-		for {
-			dir, base := filepath.Dir(from), filepath.Base(from)
-			if dir == from {
-				break
-			}
-			dn := overlay[dir]
-			if dn == nil || dn.isDeleted() {
-				dn = &node{children: make(map[string]*node)}
-				overlay[dir] = dn
-			}
-			if n.isDeleted() && !dn.isDir() {
-				break
-			}
-			if !dn.isDir() {
-				panic("fsys inconsistency")
-			}
-			dn.children[base] = n
-			if n.isDeleted() {
-				// Deletion is recorded now.
-				// Don't need to create entire parent chain,
-				// because we don't need to force parents to exist.
-				break
-			}
-			from, n = dir, dn
-		}
-	}
-
+	overlay = list
 	return nil
 }
 
@@ -351,15 +448,16 @@ func ReadDir(name string) ([]fs.DirEntry, error) {
 	if !info.replaced {
 		return osReadDir(name)
 	}
-	if !info.dir {
+	if info.file {
 		return nil, &fs.PathError{Op: "read", Path: name, Err: errNotDir}
 	}
 
 	// Start with normal disk listing.
-	dirs, err := osReadDir(name)
+	dirs, err := osReadDir(info.actual)
 	if err != nil && !os.IsNotExist(err) && !errors.Is(err, errNotDir) {
 		return nil, err
 	}
+	dirErr := err
 
 	// Merge disk listing and overlay entries in map.
 	all := make(map[string]fs.DirEntry)
@@ -395,6 +493,10 @@ func ReadDir(name string) ([]fs.DirEntry, error) {
 		dirs = append(dirs, d)
 	}
 	slices.SortFunc(dirs, func(x, y fs.DirEntry) int { return strings.Compare(x.Name(), y.Name()) })
+
+	if len(dirs) == 0 {
+		return nil, dirErr
+	}
 	return dirs, nil
 }
 
@@ -414,8 +516,8 @@ func Actual(name string) string {
 // Replaced reports whether the named file has been modified
 // in the virtual file system compared to the OS file system.
 func Replaced(name string) bool {
-	p, ok := overlay[abs(name)]
-	return ok && !p.isDir()
+	info := stat(name)
+	return info.deleted || info.replaced && !info.dir
 }
 
 // Open opens the named file in the virtual file system.
