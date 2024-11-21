@@ -32,7 +32,7 @@ import (
 
 	"cmd/go/internal/base"
 	"cmd/go/internal/cfg"
-	"cmd/go/internal/fips"
+	"cmd/go/internal/fips140"
 	"cmd/go/internal/fsys"
 	"cmd/go/internal/gover"
 	"cmd/go/internal/imports"
@@ -407,7 +407,7 @@ func (p *Package) copyBuild(opts PackageOpts, pp *build.Package) {
 	p.BinaryOnly = pp.BinaryOnly
 
 	// TODO? Target
-	p.Goroot = pp.Goroot
+	p.Goroot = pp.Goroot || fips140.Snapshot() && str.HasFilePathPrefix(p.Dir, fips140.Dir())
 	p.Standard = p.Goroot && p.ImportPath != "" && search.IsStandardImportPath(p.ImportPath)
 	p.GoFiles = pp.GoFiles
 	p.CgoFiles = pp.CgoFiles
@@ -885,7 +885,10 @@ func loadPackageData(ctx context.Context, path, parentPath, parentDir, parentRoo
 	}
 	r := resolvedImportCache.Do(importKey, func() resolvedImport {
 		var r resolvedImport
-		if cfg.ModulesEnabled {
+		if newPath, dir, ok := fips140.ResolveImport(path); ok {
+			r.path = newPath
+			r.dir = dir
+		} else if cfg.ModulesEnabled {
 			r.dir, r.path, r.err = modload.Lookup(parentPath, parentIsStd, path)
 		} else if build.IsLocalImport(path) {
 			r.dir = filepath.Join(parentDir, path)
@@ -1516,6 +1519,23 @@ func disallowInternal(ctx context.Context, srcDir string, importer *Package, imp
 		i-- // rewind over slash in ".../internal"
 	}
 
+	// FIPS-140 snapshots are special, because they comes from a non-GOROOT
+	// directory, so the usual directory rules don't work apply, or rather they
+	// apply differently depending on whether we are using a snapshot or the
+	// in-tree copy of the code. We apply a consistent rule here:
+	// crypto/internal/fips140 can only see crypto/internal, never top-of-tree internal.
+	// Similarly, crypto/... can see crypto/internal/fips140 even though the usual rules
+	// would not allow it in snapshot mode.
+	if str.HasPathPrefix(importerPath, "crypto") && str.HasPathPrefix(p.ImportPath, "crypto/internal/fips140") {
+		return nil // crypto can use crypto/internal/fips140
+	}
+	if str.HasPathPrefix(importerPath, "crypto/internal/fips140") {
+		if str.HasPathPrefix(p.ImportPath, "crypto/internal") {
+			return nil // crypto/internal/fips140 can use crypto/internal
+		}
+		goto Error
+	}
+
 	if p.Module == nil {
 		parent := p.Dir[:i+len(p.Dir)-len(p.ImportPath)]
 
@@ -1546,6 +1566,7 @@ func disallowInternal(ctx context.Context, srcDir string, importer *Package, imp
 		}
 	}
 
+Error:
 	// Internal is present, and srcDir is outside parent's tree. Not allowed.
 	perr := &PackageError{
 		alwaysPrintStack: true,
@@ -2430,8 +2451,8 @@ func (p *Package) setBuildInfo(ctx context.Context, autoVCS bool) {
 	if cfg.RawGOEXPERIMENT != "" {
 		appendSetting("GOEXPERIMENT", cfg.RawGOEXPERIMENT)
 	}
-	if fips.Enabled() {
-		appendSetting("GOFIPS140", fips.Version())
+	if fips140.Enabled() {
+		appendSetting("GOFIPS140", fips140.Version())
 	}
 	appendSetting("GOOS", cfg.BuildContext.GOOS)
 	if key, val, _ := cfg.GetArchEnv(); key != "" && val != "" {
