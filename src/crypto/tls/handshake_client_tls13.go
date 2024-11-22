@@ -39,7 +39,7 @@ type clientHandshakeStateTLS13 struct {
 	masterSecret  *tls13.MasterSecret
 	trafficSecret []byte // client_application_traffic_secret_0
 
-	echContext *echContext
+	echContext *echClientContext
 }
 
 // handshake requires hs.c, hs.hello, hs.serverHello, hs.keyShareKeys, and,
@@ -105,7 +105,7 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 
 			if hs.serverHello.encryptedClientHello != nil {
 				c.sendAlert(alertUnsupportedExtension)
-				return errors.New("tls: unexpected encrypted_client_hello extension in server hello despite ECH being accepted")
+				return errors.New("tls: unexpected encrypted client hello extension in server hello despite ECH being accepted")
 			}
 
 			if hs.hello.serverName == "" && hs.serverHello.serverNameAck {
@@ -288,7 +288,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 	} else if hs.serverHello.encryptedClientHello != nil {
 		// Unsolicited ECH extension should be rejected
 		c.sendAlert(alertUnsupportedExtension)
-		return errors.New("tls: unexpected ECH extension in serverHello")
+		return errors.New("tls: unexpected encrypted client hello extension in serverHello")
 	}
 
 	// The only HelloRetryRequest extensions we support are key_share and
@@ -322,12 +322,11 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 			c.sendAlert(alertIllegalParameter)
 			return errors.New("tls: server sent an unnecessary HelloRetryRequest key_share")
 		}
-		// Note: we don't support selecting X25519Kyber768Draft00 in a HRR,
-		// because we currently only support it at all when CurvePreferences is
-		// empty, which will cause us to also send a key share for it.
+		// Note: we don't support selecting X25519MLKEM768 in a HRR, because it
+		// is currently first in preference order, so if it's enabled we'll
+		// always send a key share for it.
 		//
-		// This will have to change once we support selecting hybrid KEMs
-		// without sending key shares for them.
+		// This will have to change once we support multiple hybrid KEMs.
 		if _, ok := curveForCurveID(curveID); !ok {
 			c.sendAlert(alertInternalError)
 			return errors.New("tls: CurvePreferences includes unsupported curve")
@@ -480,12 +479,12 @@ func (hs *clientHandshakeStateTLS13) establishHandshakeKeys() error {
 	c := hs.c
 
 	ecdhePeerData := hs.serverHello.serverShare.data
-	if hs.serverHello.serverShare.group == x25519Kyber768Draft00 {
-		if len(ecdhePeerData) != x25519PublicKeySize+mlkem.CiphertextSize768 {
+	if hs.serverHello.serverShare.group == X25519MLKEM768 {
+		if len(ecdhePeerData) != mlkem.CiphertextSize768+x25519PublicKeySize {
 			c.sendAlert(alertIllegalParameter)
-			return errors.New("tls: invalid server key share")
+			return errors.New("tls: invalid server X25519MLKEM768 key share")
 		}
-		ecdhePeerData = hs.serverHello.serverShare.data[:x25519PublicKeySize]
+		ecdhePeerData = hs.serverHello.serverShare.data[mlkem.CiphertextSize768:]
 	}
 	peerKey, err := hs.keyShareKeys.ecdhe.Curve().NewPublicKey(ecdhePeerData)
 	if err != nil {
@@ -497,17 +496,17 @@ func (hs *clientHandshakeStateTLS13) establishHandshakeKeys() error {
 		c.sendAlert(alertIllegalParameter)
 		return errors.New("tls: invalid server key share")
 	}
-	if hs.serverHello.serverShare.group == x25519Kyber768Draft00 {
-		if hs.keyShareKeys.kyber == nil {
+	if hs.serverHello.serverShare.group == X25519MLKEM768 {
+		if hs.keyShareKeys.mlkem == nil {
 			return c.sendAlert(alertInternalError)
 		}
-		ciphertext := hs.serverHello.serverShare.data[x25519PublicKeySize:]
-		kyberShared, err := kyberDecapsulate(hs.keyShareKeys.kyber, ciphertext)
+		ciphertext := hs.serverHello.serverShare.data[:mlkem.CiphertextSize768]
+		mlkemShared, err := hs.keyShareKeys.mlkem.Decapsulate(ciphertext)
 		if err != nil {
 			c.sendAlert(alertIllegalParameter)
-			return errors.New("tls: invalid Kyber server key share")
+			return errors.New("tls: invalid X25519MLKEM768 server key share")
 		}
-		sharedKey = append(sharedKey, kyberShared...)
+		sharedKey = append(mlkemShared, sharedKey...)
 	}
 	c.curveID = hs.serverHello.serverShare.group
 
@@ -604,7 +603,7 @@ func (hs *clientHandshakeStateTLS13) readServerParameters() error {
 	}
 	if hs.echContext != nil && !hs.echContext.echRejected && encryptedExtensions.echRetryConfigs != nil {
 		c.sendAlert(alertUnsupportedExtension)
-		return errors.New("tls: server sent ECH retry configs after accepting ECH")
+		return errors.New("tls: server sent encrypted client hello retry configs after accepting encrypted client hello")
 	}
 
 	return nil
