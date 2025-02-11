@@ -26,15 +26,24 @@ import (
 	"crypto/internal/fips140"
 	"crypto/internal/fips140/aes"
 	"crypto/internal/fips140/aes/gcm"
+	"crypto/internal/fips140/bigmod"
+	"crypto/internal/fips140/drbg"
+	"crypto/internal/fips140/ecdh"
 	"crypto/internal/fips140/ecdsa"
 	"crypto/internal/fips140/ed25519"
 	"crypto/internal/fips140/edwards25519"
+	"crypto/internal/fips140/hkdf"
 	"crypto/internal/fips140/hmac"
 	"crypto/internal/fips140/mlkem"
 	"crypto/internal/fips140/pbkdf2"
+	"crypto/internal/fips140/rsa"
 	"crypto/internal/fips140/sha256"
 	"crypto/internal/fips140/sha3"
 	"crypto/internal/fips140/sha512"
+	"crypto/internal/fips140/ssh"
+	"crypto/internal/fips140/subtle"
+	"crypto/internal/fips140/tls12"
+	"crypto/internal/fips140/tls13"
 	"crypto/rand"
 	_ "embed"
 	"encoding/binary"
@@ -94,6 +103,8 @@ const (
 var (
 	// SHA2 algorithm capabilities:
 	//   https://pages.nist.gov/ACVP/draft-celi-acvp-sha.html#section-7.2
+	// SHA3 and SHAKE algorithm capabilities:
+	//   https://pages.nist.gov/ACVP/draft-celi-acvp-sha3.html#name-sha3-and-shake-algorithm-ca
 	// HMAC algorithm capabilities:
 	//   https://pages.nist.gov/ACVP/draft-fussell-acvp-mac.html#section-7
 	// PBKDF2 algorithm capabilities:
@@ -108,6 +119,22 @@ var (
 	//   https://pages.nist.gov/ACVP/draft-fussell-acvp-ecdsa.html#section-7
 	// AES algorithm capabilities:
 	//   https://pages.nist.gov/ACVP/draft-celi-acvp-symmetric.html#section-7.3
+	// HKDF KDA algorithm capabilities:
+	//   https://pages.nist.gov/ACVP/draft-hammett-acvp-kas-kdf-hkdf.html#section-7.3
+	// TLS 1.2 KDF algorithm capabilities:
+	//   https://pages.nist.gov/ACVP/draft-celi-acvp-kdf-tls.html#section-7.2
+	// TLS 1.3 KDF algorithm capabilities:
+	//   https://pages.nist.gov/ACVP/draft-hammett-acvp-kdf-tls-v1.3.html#section-7.2
+	// SSH KDF algorithm capabilities:
+	//   https://pages.nist.gov/ACVP/draft-celi-acvp-kdf-ssh.html#section-7.2
+	// ECDH algorithm capabilities:
+	//   https://pages.nist.gov/ACVP/draft-hammett-acvp-kas-ssc-ecc.html#section-7.3
+	// HMAC DRBG and CTR DRBG algorithm capabilities:
+	//   https://pages.nist.gov/ACVP/draft-vassilev-acvp-drbg.html#section-7.2
+	// KDF-Counter and KDF-Feedback algorithm capabilities:
+	//   https://pages.nist.gov/ACVP/draft-celi-acvp-kbkdf.html#section-7.3
+	// RSA algorithm capabilities:
+	//   https://pages.nist.gov/ACVP/draft-celi-acvp-rsa.html#section-7.3
 	//go:embed acvp_capabilities.json
 	capabilitiesJson []byte
 
@@ -139,6 +166,17 @@ var (
 		"SHA3-512":     cmdHashAft(sha3.New512()),
 		"SHA3-512/MCT": cmdSha3Mct(sha3.New512()),
 
+		// Note: SHAKE AFT and VOT test types can be handled by the same command
+		// handler impl, but use distinct acvptool command names, and so are
+		// registered twice with the same digest: once under "SHAKE-xxx" for AFT,
+		// and once under"SHAKE-xxx/VOT" for VOT.
+		"SHAKE-128":     cmdShakeAftVot(sha3.NewShake128()),
+		"SHAKE-128/VOT": cmdShakeAftVot(sha3.NewShake128()),
+		"SHAKE-128/MCT": cmdShakeMct(sha3.NewShake128()),
+		"SHAKE-256":     cmdShakeAftVot(sha3.NewShake256()),
+		"SHAKE-256/VOT": cmdShakeAftVot(sha3.NewShake256()),
+		"SHAKE-256/MCT": cmdShakeMct(sha3.NewShake256()),
+
 		"HMAC-SHA2-224":     cmdHmacAft(func() fips140.Hash { return sha256.New224() }),
 		"HMAC-SHA2-256":     cmdHmacAft(func() fips140.Hash { return sha256.New() }),
 		"HMAC-SHA2-384":     cmdHmacAft(func() fips140.Hash { return sha512.New384() }),
@@ -149,6 +187,22 @@ var (
 		"HMAC-SHA3-256":     cmdHmacAft(func() fips140.Hash { return sha3.New256() }),
 		"HMAC-SHA3-384":     cmdHmacAft(func() fips140.Hash { return sha3.New384() }),
 		"HMAC-SHA3-512":     cmdHmacAft(func() fips140.Hash { return sha3.New512() }),
+
+		"HKDF/SHA2-224":     cmdHkdfAft(func() fips140.Hash { return sha256.New224() }),
+		"HKDF/SHA2-256":     cmdHkdfAft(func() fips140.Hash { return sha256.New() }),
+		"HKDF/SHA2-384":     cmdHkdfAft(func() fips140.Hash { return sha512.New384() }),
+		"HKDF/SHA2-512":     cmdHkdfAft(func() fips140.Hash { return sha512.New() }),
+		"HKDF/SHA2-512/224": cmdHkdfAft(func() fips140.Hash { return sha512.New512_224() }),
+		"HKDF/SHA2-512/256": cmdHkdfAft(func() fips140.Hash { return sha512.New512_256() }),
+		"HKDF/SHA3-224":     cmdHkdfAft(func() fips140.Hash { return sha3.New224() }),
+		"HKDF/SHA3-256":     cmdHkdfAft(func() fips140.Hash { return sha3.New256() }),
+		"HKDF/SHA3-384":     cmdHkdfAft(func() fips140.Hash { return sha3.New384() }),
+		"HKDF/SHA3-512":     cmdHkdfAft(func() fips140.Hash { return sha3.New512() }),
+
+		"HKDFExtract/SHA2-256":     cmdHkdfExtractAft(func() fips140.Hash { return sha256.New() }),
+		"HKDFExtract/SHA2-384":     cmdHkdfExtractAft(func() fips140.Hash { return sha512.New384() }),
+		"HKDFExpandLabel/SHA2-256": cmdHkdfExpandLabelAft(func() fips140.Hash { return sha256.New() }),
+		"HKDFExpandLabel/SHA2-384": cmdHkdfExpandLabelAft(func() fips140.Hash { return sha512.New384() }),
 
 		"PBKDF": cmdPbkdf(),
 
@@ -189,6 +243,57 @@ var (
 		"AES-GCM/open":           cmdAesGcmOpen(false),
 		"AES-GCM-randnonce/seal": cmdAesGcmSeal(true),
 		"AES-GCM-randnonce/open": cmdAesGcmOpen(true),
+
+		"CMAC-AES":        cmdCmacAesAft(),
+		"CMAC-AES/verify": cmdCmacAesVerifyAft(),
+
+		// Note: Only SHA2-256, SHA2-384 and SHA2-512 are valid hash functions for TLSKDF.
+		// 		 See https://pages.nist.gov/ACVP/draft-celi-acvp-kdf-tls.html#section-7.2.1
+		"TLSKDF/1.2/SHA2-256": cmdTlsKdf12Aft(func() fips140.Hash { return sha256.New() }),
+		"TLSKDF/1.2/SHA2-384": cmdTlsKdf12Aft(func() fips140.Hash { return sha512.New384() }),
+		"TLSKDF/1.2/SHA2-512": cmdTlsKdf12Aft(func() fips140.Hash { return sha512.New() }),
+
+		// Note: only SHA2-224, SHA2-256, SHA2-384 and SHA2-512 are valid hash functions for SSHKDF.
+		// 		 See https://pages.nist.gov/ACVP/draft-celi-acvp-kdf-ssh.html#section-7.2.1
+		"SSHKDF/SHA2-224/client": cmdSshKdfAft(func() fips140.Hash { return sha256.New224() }, ssh.ClientKeys),
+		"SSHKDF/SHA2-224/server": cmdSshKdfAft(func() fips140.Hash { return sha256.New224() }, ssh.ServerKeys),
+		"SSHKDF/SHA2-256/client": cmdSshKdfAft(func() fips140.Hash { return sha256.New() }, ssh.ClientKeys),
+		"SSHKDF/SHA2-256/server": cmdSshKdfAft(func() fips140.Hash { return sha256.New() }, ssh.ServerKeys),
+		"SSHKDF/SHA2-384/client": cmdSshKdfAft(func() fips140.Hash { return sha512.New384() }, ssh.ClientKeys),
+		"SSHKDF/SHA2-384/server": cmdSshKdfAft(func() fips140.Hash { return sha512.New384() }, ssh.ServerKeys),
+		"SSHKDF/SHA2-512/client": cmdSshKdfAft(func() fips140.Hash { return sha512.New() }, ssh.ClientKeys),
+		"SSHKDF/SHA2-512/server": cmdSshKdfAft(func() fips140.Hash { return sha512.New() }, ssh.ServerKeys),
+
+		"ECDH/P-224": cmdEcdhAftVal(ecdh.P224()),
+		"ECDH/P-256": cmdEcdhAftVal(ecdh.P256()),
+		"ECDH/P-384": cmdEcdhAftVal(ecdh.P384()),
+		"ECDH/P-521": cmdEcdhAftVal(ecdh.P521()),
+
+		"ctrDRBG/AES-256":        cmdCtrDrbgAft(),
+		"ctrDRBG-reseed/AES-256": cmdCtrDrbgReseedAft(),
+
+		"RSA/keyGen": cmdRsaKeyGenAft(),
+
+		"RSA/sigGen/SHA2-224/pkcs1v1.5": cmdRsaSigGenAft(func() fips140.Hash { return sha256.New224() }, "SHA-224", false),
+		"RSA/sigGen/SHA2-256/pkcs1v1.5": cmdRsaSigGenAft(func() fips140.Hash { return sha256.New() }, "SHA-256", false),
+		"RSA/sigGen/SHA2-384/pkcs1v1.5": cmdRsaSigGenAft(func() fips140.Hash { return sha512.New384() }, "SHA-384", false),
+		"RSA/sigGen/SHA2-512/pkcs1v1.5": cmdRsaSigGenAft(func() fips140.Hash { return sha512.New() }, "SHA-512", false),
+		"RSA/sigGen/SHA2-224/pss":       cmdRsaSigGenAft(func() fips140.Hash { return sha256.New224() }, "SHA-224", true),
+		"RSA/sigGen/SHA2-256/pss":       cmdRsaSigGenAft(func() fips140.Hash { return sha256.New() }, "SHA-256", true),
+		"RSA/sigGen/SHA2-384/pss":       cmdRsaSigGenAft(func() fips140.Hash { return sha512.New384() }, "SHA-384", true),
+		"RSA/sigGen/SHA2-512/pss":       cmdRsaSigGenAft(func() fips140.Hash { return sha512.New() }, "SHA-512", true),
+
+		"RSA/sigVer/SHA2-224/pkcs1v1.5": cmdRsaSigVerAft(func() fips140.Hash { return sha256.New224() }, "SHA-224", false),
+		"RSA/sigVer/SHA2-256/pkcs1v1.5": cmdRsaSigVerAft(func() fips140.Hash { return sha256.New() }, "SHA-256", false),
+		"RSA/sigVer/SHA2-384/pkcs1v1.5": cmdRsaSigVerAft(func() fips140.Hash { return sha512.New384() }, "SHA-384", false),
+		"RSA/sigVer/SHA2-512/pkcs1v1.5": cmdRsaSigVerAft(func() fips140.Hash { return sha512.New() }, "SHA-512", false),
+		"RSA/sigVer/SHA2-224/pss":       cmdRsaSigVerAft(func() fips140.Hash { return sha256.New224() }, "SHA-224", true),
+		"RSA/sigVer/SHA2-256/pss":       cmdRsaSigVerAft(func() fips140.Hash { return sha256.New() }, "SHA-256", true),
+		"RSA/sigVer/SHA2-384/pss":       cmdRsaSigVerAft(func() fips140.Hash { return sha512.New384() }, "SHA-384", true),
+		"RSA/sigVer/SHA2-512/pss":       cmdRsaSigVerAft(func() fips140.Hash { return sha512.New() }, "SHA-512", true),
+
+		"KDF-counter":  cmdKdfCounterAft(),
+		"KDF-feedback": cmdKdfFeedbackAft(),
 	}
 )
 
@@ -406,6 +511,70 @@ func cmdSha3Mct(h fips140.Hash) command {
 	}
 }
 
+func cmdShakeAftVot(h *sha3.SHAKE) command {
+	return command{
+		requiredArgs: 2, // Message, output length (bytes)
+		handler: func(args [][]byte) ([][]byte, error) {
+			msg := args[0]
+
+			outLenBytes := binary.LittleEndian.Uint32(args[1])
+			digest := make([]byte, outLenBytes)
+
+			h.Reset()
+			h.Write(msg)
+			h.Read(digest)
+
+			return [][]byte{digest}, nil
+		},
+	}
+}
+
+func cmdShakeMct(h *sha3.SHAKE) command {
+	return command{
+		requiredArgs: 4, // Seed message, min output length (bytes), max output length (bytes), output length (bytes)
+		handler: func(args [][]byte) ([][]byte, error) {
+			md := args[0]
+			minOutBytes := binary.LittleEndian.Uint32(args[1])
+			maxOutBytes := binary.LittleEndian.Uint32(args[2])
+
+			outputLenBytes := binary.LittleEndian.Uint32(args[3])
+			if outputLenBytes < 2 {
+				return nil, fmt.Errorf("invalid output length: %d", outputLenBytes)
+			}
+
+			rangeBytes := maxOutBytes - minOutBytes + 1
+			if rangeBytes == 0 {
+				return nil, fmt.Errorf("invalid maxOutBytes and minOutBytes: %d, %d", maxOutBytes, minOutBytes)
+			}
+
+			for i := 0; i < 1000; i++ {
+				// "The MSG[i] input to SHAKE MUST always contain at least 128 bits. If this is not the case
+				// as the previous digest was too short, append empty bits to the rightmost side of the digest."
+				boundary := min(len(md), 16)
+				msg := make([]byte, 16)
+				copy(msg, md[:boundary])
+
+				//  MD[i] = SHAKE(MSG[i], OutputLen * 8)
+				h.Reset()
+				h.Write(msg)
+				digest := make([]byte, outputLenBytes)
+				h.Read(digest)
+				md = digest
+
+				// RightmostOutputBits = 16 rightmost bits of MD[i] as an integer
+				// OutputLen = minOutBytes + (RightmostOutputBits % Range)
+				rightmostOutput := uint32(md[outputLenBytes-2])<<8 | uint32(md[outputLenBytes-1])
+				outputLenBytes = minOutBytes + (rightmostOutput % rangeBytes)
+			}
+
+			encodedOutputLenBytes := make([]byte, 4)
+			binary.LittleEndian.PutUint32(encodedOutputLenBytes, outputLenBytes)
+
+			return [][]byte{md, encodedOutputLenBytes}, nil
+		},
+	}
+}
+
 func cmdHmacAft(h func() fips140.Hash) command {
 	return command{
 		requiredArgs: 2, // Message and key
@@ -415,6 +584,46 @@ func cmdHmacAft(h func() fips140.Hash) command {
 			mac := hmac.New(h, key)
 			mac.Write(msg)
 			return [][]byte{mac.Sum(nil)}, nil
+		},
+	}
+}
+
+func cmdHkdfAft(h func() fips140.Hash) command {
+	return command{
+		requiredArgs: 4, // Key, salt, info, length bytes
+		handler: func(args [][]byte) ([][]byte, error) {
+			key := args[0]
+			salt := args[1]
+			info := args[2]
+			keyLen := int(binary.LittleEndian.Uint32(args[3]))
+
+			return [][]byte{hkdf.Key(h, key, salt, string(info), keyLen)}, nil
+		},
+	}
+}
+
+func cmdHkdfExtractAft(h func() fips140.Hash) command {
+	return command{
+		requiredArgs: 2, // secret, salt
+		handler: func(args [][]byte) ([][]byte, error) {
+			secret := args[0]
+			salt := args[1]
+
+			return [][]byte{hkdf.Extract(h, secret, salt)}, nil
+		},
+	}
+}
+
+func cmdHkdfExpandLabelAft(h func() fips140.Hash) command {
+	return command{
+		requiredArgs: 4, // output length, secret, label, transcript hash
+		handler: func(args [][]byte) ([][]byte, error) {
+			keyLen := int(binary.LittleEndian.Uint32(args[0]))
+			secret := args[1]
+			label := args[2]
+			transcriptHash := args[3]
+
+			return [][]byte{tls13.ExpandLabel(h, secret, string(label), transcriptHash, keyLen)}, nil
 		},
 	}
 }
@@ -929,39 +1138,6 @@ func cmdMlKem1024DecapAft() command {
 	}
 }
 
-func cmdHmacDrbgAft(h func() fips140.Hash) command {
-	return command{
-		requiredArgs: 6, // Output length, entropy, personalization, ad1, ad2, nonce
-		handler: func(args [][]byte) ([][]byte, error) {
-			outLen := binary.LittleEndian.Uint32(args[0])
-			entropy := args[1]
-			personalization := args[2]
-			ad1 := args[3]
-			ad2 := args[4]
-			nonce := args[5]
-
-			// Our capabilities describe no additional data support.
-			if len(ad1) != 0 || len(ad2) != 0 {
-				return nil, errors.New("additional data not supported")
-			}
-
-			// Our capabilities describe no prediction resistance (requires reseed) and no reseed.
-			// So the test procedure is:
-			//   * Instantiate DRBG
-			//   * Generate but don't output
-			//   * Generate output
-			//   * Uninstantiate
-			// See Table 7 in draft-vassilev-acvp-drbg
-			out := make([]byte, outLen)
-			drbg := ecdsa.TestingOnlyNewDRBG(h, entropy, nonce, personalization)
-			drbg.Generate(out)
-			drbg.Generate(out)
-
-			return [][]byte{out}, nil
-		},
-	}
-}
-
 func lookupCurve(name string) (elliptic.Curve, error) {
 	var c elliptic.Curve
 
@@ -1154,14 +1330,513 @@ func cmdAesGcmOpen(randNonce bool) command {
 	}
 }
 
+func cmdCmacAesAft() command {
+	return command{
+		requiredArgs: 3, // Number of output bytes, key, message
+		handler: func(args [][]byte) ([][]byte, error) {
+			// safe to truncate to int based on our capabilities describing a max MAC output len of 128 bits.
+			outputLen := int(binary.LittleEndian.Uint32(args[0]))
+			key := args[1]
+			message := args[2]
+
+			blockCipher, err := aes.New(key)
+			if err != nil {
+				return nil, fmt.Errorf("creating AES block cipher with key len %d: %w", len(key), err)
+			}
+
+			cmac := gcm.NewCMAC(blockCipher)
+			tag := cmac.MAC(message)
+
+			if outputLen > len(tag) {
+				return nil, fmt.Errorf("invalid output length: expected %d, got %d", outputLen, len(tag))
+			}
+
+			return [][]byte{tag[:outputLen]}, nil
+		},
+	}
+}
+
+func cmdCmacAesVerifyAft() command {
+	return command{
+		requiredArgs: 3, // Key, message, claimed MAC
+		handler: func(args [][]byte) ([][]byte, error) {
+			key := args[0]
+			message := args[1]
+			claimedMAC := args[2]
+
+			blockCipher, err := aes.New(key)
+			if err != nil {
+				return nil, fmt.Errorf("creating AES block cipher with key len %d: %w", len(key), err)
+			}
+
+			cmac := gcm.NewCMAC(blockCipher)
+			tag := cmac.MAC(message)
+
+			if subtle.ConstantTimeCompare(tag[:len(claimedMAC)], claimedMAC) != 1 {
+				return [][]byte{{0}}, nil
+			}
+
+			return [][]byte{{1}}, nil
+		},
+	}
+}
+
+func cmdTlsKdf12Aft(h func() fips140.Hash) command {
+	return command{
+		requiredArgs: 5, // Number output bytes, secret, label, seed1, seed2
+		handler: func(args [][]byte) ([][]byte, error) {
+			outputLen := binary.LittleEndian.Uint32(args[0])
+			secret := args[1]
+			label := string(args[2])
+			seed1 := args[3]
+			seed2 := args[4]
+
+			return [][]byte{tls12.PRF(h, secret, label, append(seed1, seed2...), int(outputLen))}, nil
+		},
+	}
+}
+
+func cmdSshKdfAft(hFunc func() fips140.Hash, direction ssh.Direction) command {
+	return command{
+		requiredArgs: 4, // K, H, SessionID, cipher
+		handler: func(args [][]byte) ([][]byte, error) {
+			k := args[0]
+			h := args[1]
+			sessionID := args[2]
+			cipher := string(args[3])
+
+			var keyLen int
+			switch cipher {
+			case "AES-128":
+				keyLen = 16
+			case "AES-192":
+				keyLen = 24
+			case "AES-256":
+				keyLen = 32
+			default:
+				return nil, fmt.Errorf("unsupported cipher: %q", cipher)
+			}
+
+			ivKey, encKey, intKey := ssh.Keys(hFunc, direction, k, h, sessionID, 16, keyLen, hFunc().Size())
+			return [][]byte{ivKey, encKey, intKey}, nil
+		},
+	}
+}
+
+func cmdEcdhAftVal[P ecdh.Point[P]](curve *ecdh.Curve[P]) command {
+	return command{
+		requiredArgs: 3, // X, Y, private key (empty for Val type tests)
+		handler: func(args [][]byte) ([][]byte, error) {
+			peerX := args[0]
+			peerY := args[1]
+			rawSk := args[2]
+
+			uncompressedPk := append([]byte{4}, append(peerX, peerY...)...) // 4 for uncompressed point format
+			pk, err := ecdh.NewPublicKey(curve, uncompressedPk)
+			if err != nil {
+				return nil, fmt.Errorf("invalid peer public key x,y: %v", err)
+			}
+
+			var sk *ecdh.PrivateKey
+			if len(rawSk) > 0 {
+				sk, err = ecdh.NewPrivateKey(curve, rawSk)
+			} else {
+				sk, err = ecdh.GenerateKey(curve, rand.Reader)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("private key error: %v", err)
+			}
+
+			pubBytes := sk.PublicKey().Bytes()
+			coordLen := (len(pubBytes) - 1) / 2
+			x := pubBytes[1 : 1+coordLen]
+			y := pubBytes[1+coordLen:]
+
+			secret, err := ecdh.ECDH(curve, sk, pk)
+			if err != nil {
+				return nil, fmt.Errorf("key agreement failed: %v", err)
+			}
+
+			return [][]byte{x, y, secret}, nil
+		},
+	}
+}
+
+func cmdHmacDrbgAft(h func() fips140.Hash) command {
+	return command{
+		requiredArgs: 6, // Output length, entropy, personalization, ad1, ad2, nonce
+		handler: func(args [][]byte) ([][]byte, error) {
+			outLen := binary.LittleEndian.Uint32(args[0])
+			entropy := args[1]
+			personalization := args[2]
+			ad1 := args[3]
+			ad2 := args[4]
+			nonce := args[5]
+
+			// Our capabilities describe no additional data support.
+			if len(ad1) != 0 || len(ad2) != 0 {
+				return nil, errors.New("additional data not supported")
+			}
+
+			// Our capabilities describe no prediction resistance (requires reseed) and no reseed.
+			// So the test procedure is:
+			//   * Instantiate DRBG
+			//   * Generate but don't output
+			//   * Generate output
+			//   * Uninstantiate
+			// See Table 7 in draft-vassilev-acvp-drbg
+			out := make([]byte, outLen)
+			drbg := ecdsa.TestingOnlyNewDRBG(h, entropy, nonce, personalization)
+			drbg.Generate(out)
+			drbg.Generate(out)
+
+			return [][]byte{out}, nil
+		},
+	}
+}
+
+func cmdCtrDrbgAft() command {
+	return command{
+		requiredArgs: 6, // Output length, entropy, personalization, ad1, ad2, nonce
+		handler: func(args [][]byte) ([][]byte, error) {
+			return acvpCtrDrbg{
+				outLen:          binary.LittleEndian.Uint32(args[0]),
+				entropy:         args[1],
+				personalization: args[2],
+				ad1:             args[3],
+				ad2:             args[4],
+				nonce:           args[5],
+			}.process()
+		},
+	}
+}
+
+func cmdCtrDrbgReseedAft() command {
+	return command{
+		requiredArgs: 8, // Output length, entropy, personalization, reseedAD, reseedEntropy, ad1, ad2, nonce
+		handler: func(args [][]byte) ([][]byte, error) {
+			return acvpCtrDrbg{
+				outLen:          binary.LittleEndian.Uint32(args[0]),
+				entropy:         args[1],
+				personalization: args[2],
+				reseedAd:        args[3],
+				reseedEntropy:   args[4],
+				ad1:             args[5],
+				ad2:             args[6],
+				nonce:           args[7],
+			}.process()
+		},
+	}
+}
+
+type acvpCtrDrbg struct {
+	outLen          uint32
+	entropy         []byte
+	personalization []byte
+	ad1             []byte
+	ad2             []byte
+	nonce           []byte
+	reseedAd        []byte // May be empty for no reseed
+	reseedEntropy   []byte // May be empty for no reseed
+}
+
+func (args acvpCtrDrbg) process() ([][]byte, error) {
+	// Our capability describes no personalization support.
+	if len(args.personalization) > 0 {
+		return nil, errors.New("personalization string not supported")
+	}
+
+	// Our capability describes no derivation function support, so the nonce
+	// should be empty.
+	if len(args.nonce) > 0 {
+		return nil, errors.New("unexpected nonce value")
+	}
+
+	// Our capability describes entropy input len of 384 bits.
+	entropy, err := require48Bytes(args.entropy)
+	if err != nil {
+		return nil, fmt.Errorf("entropy: %w", err)
+	}
+
+	// Our capability describes additional input len of 384 bits.
+	ad1, err := require48Bytes(args.ad1)
+	if err != nil {
+		return nil, fmt.Errorf("AD1: %w", err)
+	}
+	ad2, err := require48Bytes(args.ad2)
+	if err != nil {
+		return nil, fmt.Errorf("AD2: %w", err)
+	}
+
+	withReseed := len(args.reseedAd) > 0
+	var reseedAd, reseedEntropy *[48]byte
+	if withReseed {
+		// Ditto RE: entropy and additional data lengths for reseeding.
+		if reseedAd, err = require48Bytes(args.reseedAd); err != nil {
+			return nil, fmt.Errorf("reseed AD: %w", err)
+		}
+		if reseedEntropy, err = require48Bytes(args.reseedEntropy); err != nil {
+			return nil, fmt.Errorf("reseed entropy: %w", err)
+		}
+	}
+
+	// Our capabilities describe no prediction resistance and allow both
+	// reseed and no reseed, so the test procedure is:
+	//   * Instantiate DRBG
+	//   * Reseed (if enabled)
+	//   * Generate but don't output
+	//   * Generate output
+	//   * Uninstantiate
+	// See Table 7 in draft-vassilev-acvp-drbg
+	out := make([]byte, args.outLen)
+	ctrDrbg := drbg.NewCounter(entropy)
+	if withReseed {
+		ctrDrbg.Reseed(reseedEntropy, reseedAd)
+	}
+	ctrDrbg.Generate(out, ad1)
+	ctrDrbg.Generate(out, ad2)
+
+	return [][]byte{out}, nil
+}
+
+// Verify input is 48 byte slice, and cast it to a pointer to a fixed-size array
+// of 48 bytes, or return an error.
+func require48Bytes(input []byte) (*[48]byte, error) {
+	if inputLen := len(input); inputLen != 48 {
+		return nil, fmt.Errorf("invalid length: %d", inputLen)
+	}
+	return (*[48]byte)(input), nil
+}
+
+func cmdKdfCounterAft() command {
+	return command{
+		requiredArgs: 5, // Number output bytes, PRF name, counter location string, key, number of counter bits
+		handler: func(args [][]byte) ([][]byte, error) {
+			outputBytes := binary.LittleEndian.Uint32(args[0])
+			prf := args[1]
+			counterLocation := args[2]
+			key := args[3]
+			counterBits := binary.LittleEndian.Uint32(args[4])
+
+			if outputBytes != 32 {
+				return nil, fmt.Errorf("KDF received unsupported output length %d bytes", outputBytes)
+			}
+			if !bytes.Equal(prf, []byte("CMAC-AES128")) && !bytes.Equal(prf, []byte("CMAC-AES192")) && !bytes.Equal(prf, []byte("CMAC-AES256")) {
+				return nil, fmt.Errorf("KDF received unsupported PRF %q", string(prf))
+			}
+			if !bytes.Equal(counterLocation, []byte("before fixed data")) {
+				return nil, fmt.Errorf("KDF received unsupported counter location %q", string(counterLocation))
+			}
+			// The spec doesn't describe the "deferred" property for a KDF counterMode test case.
+			// BoringSSL's acvptool sends an empty key when deferred=true, but with the capabilities
+			// we register all test cases ahve deferred=false and provide a key from the populated
+			// keyIn property.
+			if len(key) == 0 {
+				return nil, errors.New("deferred test cases are not supported")
+			}
+			if counterBits != 16 {
+				return nil, fmt.Errorf("KDF received unsupported counter length %d", counterBits)
+			}
+
+			block, err := aes.New(key)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create cipher: %v", err)
+			}
+			kdf := gcm.NewCounterKDF(block)
+
+			var label byte
+			var context [12]byte
+			rand.Reader.Read(context[:])
+
+			result := kdf.DeriveKey(label, context)
+
+			fixedData := make([]byte, 1+1+12) // 1 byte label, 1 null byte, 12 bytes context.
+			fixedData[0] = label
+			copy(fixedData[2:], context[:])
+
+			return [][]byte{key, fixedData, result[:]}, nil
+		},
+	}
+}
+
+func cmdKdfFeedbackAft() command {
+	return command{
+		requiredArgs: 5, // Number output bytes, PRF name, counter location string, key, number of counter bits, IV
+		handler: func(args [][]byte) ([][]byte, error) {
+			// The max supported output len for the KDF algorithm type is 4096 bits, making an int cast
+			// here safe.
+			// See https://pages.nist.gov/ACVP/draft-celi-acvp-kbkdf.html#section-7.3.2
+			outputBytes := int(binary.LittleEndian.Uint32(args[0]))
+			prf := string(args[1])
+			counterLocation := args[2]
+			key := args[3]
+			counterBits := binary.LittleEndian.Uint32(args[4])
+
+			if !strings.HasPrefix(prf, "HMAC-") {
+				return nil, fmt.Errorf("feedback KDF received unsupported PRF %q", prf)
+			}
+			prf = prf[len("HMAC-"):]
+
+			h, err := lookupHash(prf)
+			if err != nil {
+				return nil, fmt.Errorf("feedback KDF received unsupported PRF %q: %w", prf, err)
+			}
+
+			if !bytes.Equal(counterLocation, []byte("after fixed data")) {
+				return nil, fmt.Errorf("feedback KDF received unsupported counter location %q", string(counterLocation))
+			}
+
+			// The spec doesn't describe the "deferred" property for a KDF counterMode test case.
+			// BoringSSL's acvptool sends an empty key when deferred=true, but with the capabilities
+			// we register all test cases have deferred=false and provide a key from the populated
+			// keyIn property.
+			if len(key) == 0 {
+				return nil, errors.New("deferred test cases are not supported")
+			}
+
+			if counterBits != 8 {
+				return nil, fmt.Errorf("feedback KDF received unsupported counter length %d", counterBits)
+			}
+
+			var context [12]byte
+			rand.Reader.Read(context[:])
+			fixedData := make([]byte, 1+1+12) // 1 byte label (we pick null), 1 null byte, 12 bytes context.
+			copy(fixedData[2:], context[:])
+
+			result := hkdf.Expand(h, key, string(fixedData[:]), outputBytes)
+
+			return [][]byte{key, fixedData[:], result[:]}, nil
+		},
+	}
+}
+
+func cmdRsaKeyGenAft() command {
+	return command{
+		requiredArgs: 1, // Modulus bit-size
+		handler: func(args [][]byte) ([][]byte, error) {
+			bitSize := binary.LittleEndian.Uint32(args[0])
+
+			key, err := getRSAKey((int)(bitSize))
+			if err != nil {
+				return nil, fmt.Errorf("generating RSA key: %w", err)
+			}
+
+			N, e, d, P, Q, _, _, _ := key.Export()
+
+			eBytes := make([]byte, 4)
+			binary.BigEndian.PutUint32(eBytes, uint32(e))
+
+			return [][]byte{eBytes, P, Q, N, d}, nil
+		},
+	}
+}
+
+func cmdRsaSigGenAft(hashFunc func() fips140.Hash, hashName string, pss bool) command {
+	return command{
+		requiredArgs: 2, // Modulus bit-size, message
+		handler: func(args [][]byte) ([][]byte, error) {
+			bitSize := binary.LittleEndian.Uint32(args[0])
+			msg := args[1]
+
+			key, err := getRSAKey((int)(bitSize))
+			if err != nil {
+				return nil, fmt.Errorf("generating RSA key: %w", err)
+			}
+
+			h := hashFunc()
+			h.Write(msg)
+			digest := h.Sum(nil)
+
+			var sig []byte
+			if !pss {
+				sig, err = rsa.SignPKCS1v15(key, hashName, digest)
+				if err != nil {
+					return nil, fmt.Errorf("signing RSA message: %w", err)
+				}
+			} else {
+				sig, err = rsa.SignPSS(rand.Reader, key, hashFunc(), digest, h.Size())
+				if err != nil {
+					return nil, fmt.Errorf("signing RSA message: %w", err)
+				}
+			}
+
+			N, e, _, _, _, _, _, _ := key.Export()
+			eBytes := make([]byte, 4)
+			binary.BigEndian.PutUint32(eBytes, uint32(e))
+
+			return [][]byte{N, eBytes, sig}, nil
+		},
+	}
+}
+
+func cmdRsaSigVerAft(hashFunc func() fips140.Hash, hashName string, pss bool) command {
+	return command{
+		requiredArgs: 4, // n, e, message, signature
+		handler: func(args [][]byte) ([][]byte, error) {
+			nBytes := args[0]
+			eBytes := args[1]
+			msg := args[2]
+			sig := args[3]
+
+			paddedE := make([]byte, 4)
+			copy(paddedE[4-len(eBytes):], eBytes)
+			e := int(binary.BigEndian.Uint32(paddedE))
+
+			n, err := bigmod.NewModulus(nBytes)
+			if err != nil {
+				return nil, fmt.Errorf("invalid RSA modulus: %w", err)
+			}
+
+			pub := &rsa.PublicKey{
+				N: n,
+				E: e,
+			}
+
+			h := hashFunc()
+			h.Write(msg)
+			digest := h.Sum(nil)
+
+			if !pss {
+				err = rsa.VerifyPKCS1v15(pub, hashName, digest, sig)
+			} else {
+				err = rsa.VerifyPSS(pub, hashFunc(), digest, sig)
+			}
+			if err != nil {
+				return [][]byte{{0}}, nil
+			}
+
+			return [][]byte{{1}}, nil
+		},
+	}
+}
+
+// rsaKeyCache caches generated keys by modulus bit-size.
+var rsaKeyCache = map[int]*rsa.PrivateKey{}
+
+// getRSAKey returns a cached RSA private key with the specified modulus bit-size
+// or generates one if necessary.
+func getRSAKey(bits int) (*rsa.PrivateKey, error) {
+	if key, exists := rsaKeyCache[bits]; exists {
+		return key, nil
+	}
+
+	key, err := rsa.GenerateKey(rand.Reader, bits)
+	if err != nil {
+		return nil, err
+	}
+
+	rsaKeyCache[bits] = key
+	return key, nil
+}
+
 func TestACVP(t *testing.T) {
 	testenv.SkipIfShortAndSlow(t)
 
 	const (
 		bsslModule    = "boringssl.googlesource.com/boringssl.git"
-		bsslVersion   = "v0.0.0-20250108043213-d3f61eeacbf7"
+		bsslVersion   = "v0.0.0-20250123161947-ba24bde161f7"
 		goAcvpModule  = "github.com/cpu/go-acvp"
-		goAcvpVersion = "v0.0.0-20250102201911-6839fc40f9f8"
+		goAcvpVersion = "v0.0.0-20250110181646-e47fea3b5d7d"
 	)
 
 	// In crypto/tls/bogo_shim_test.go the test is skipped if run on a builder with runtime.GOOS == "windows"
