@@ -281,6 +281,10 @@ func chownat(parent syscall.Handle, name string, uid, gid int) error {
 	return syscall.EWINDOWS // matches syscall.Chown
 }
 
+func lchownat(parent syscall.Handle, name string, uid, gid int) error {
+	return syscall.EWINDOWS // matches syscall.Lchown
+}
+
 func mkdirat(dirfd syscall.Handle, name string, perm FileMode) error {
 	return windows.Mkdirat(dirfd, name, syscallMode(perm))
 }
@@ -309,4 +313,13 @@ func chtimesat(dirfd syscall.Handle, name string, atime time.Time, mtime time.Ti
 		w = syscall.NsecToFiletime(mtime.UnixNano())
 	}
 	return syscall.SetFileTime(h, nil, &a, &w)
+}
+
+func readlinkat(dirfd syscall.Handle, name string) (string, error) {
+	fd, err := openat(dirfd, name, windows.O_OPEN_REPARSE, 0)
+	if err != nil {
+		return "", err
+	}
+	defer syscall.CloseHandle(fd)
+	return readReparseLinkHandle(fd)
 }

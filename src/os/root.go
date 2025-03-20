@@ -159,6 +159,12 @@ func (r *Root) Chown(name string, uid, gid int) error {
 	return rootChown(r, name, uid, gid)
 }
 
+// Lchown changes the numeric uid and gid of the named file in the root.
+// See [Lchown] for more details.
+func (r *Root) Lchown(name string, uid, gid int) error {
+	return rootLchown(r, name, uid, gid)
+}
+
 // Chtimes changes the access and modification times of the named file in the root.
 // See [Chtimes] for more details.
 func (r *Root) Chtimes(name string, atime time.Time, mtime time.Time) error {
@@ -185,6 +191,12 @@ func (r *Root) Stat(name string) (FileInfo, error) {
 func (r *Root) Lstat(name string) (FileInfo, error) {
 	r.logStat(name)
 	return rootStat(r, name, true)
+}
+
+// Readlink returns the destination of the named symbolic link in the root.
+// See [Readlink] for more details.
+func (r *Root) Readlink(name string) (string, error) {
+	return rootReadlink(r, name)
 }
 
 func (r *Root) logOpen(name string) {
