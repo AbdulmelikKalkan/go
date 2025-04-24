@@ -11,6 +11,7 @@ import (
 	"internal/goarch"
 	"internal/goos"
 	"internal/runtime/atomic"
+	"internal/runtime/gc"
 	"internal/runtime/sys"
 	"unsafe"
 )
@@ -363,7 +364,7 @@ func ReadMemStatsSlow() (base, slow MemStats) {
 		slow.Mallocs = 0
 		slow.Frees = 0
 		slow.HeapReleased = 0
-		var bySize [_NumSizeClasses]struct {
+		var bySize [gc.NumSizeClasses]struct {
 			Mallocs, Frees uint64
 		}
 
@@ -391,11 +392,11 @@ func ReadMemStatsSlow() (base, slow MemStats) {
 
 		// Collect per-sizeclass free stats.
 		var smallFree uint64
-		for i := 0; i < _NumSizeClasses; i++ {
+		for i := 0; i < gc.NumSizeClasses; i++ {
 			slow.Frees += m.smallFreeCount[i]
 			bySize[i].Frees += m.smallFreeCount[i]
 			bySize[i].Mallocs += m.smallFreeCount[i]
-			smallFree += m.smallFreeCount[i] * uint64(class_to_size[i])
+			smallFree += m.smallFreeCount[i] * uint64(gc.SizeClassToSize[i])
 		}
 		slow.Frees += m.tinyAllocCount + m.largeFreeCount
 		slow.Mallocs += slow.Frees
@@ -1776,9 +1777,11 @@ func FrameStartLine(f *Frame) int {
 
 // PersistentAlloc allocates some memory that lives outside the Go heap.
 // This memory will never be freed; use sparingly.
-func PersistentAlloc(n uintptr) unsafe.Pointer {
-	return persistentalloc(n, 0, &memstats.other_sys)
+func PersistentAlloc(n, align uintptr) unsafe.Pointer {
+	return persistentalloc(n, align, &memstats.other_sys)
 }
+
+const TagAlign = tagAlign
 
 // FPCallers works like Callers and uses frame pointer unwinding to populate
 // pcBuf with the return addresses of the physical frames on the stack.
