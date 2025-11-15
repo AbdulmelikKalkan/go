@@ -4658,6 +4658,11 @@ func reentersyscall(pc, sp, bp uintptr) {
 	gp.m.locks--
 }
 
+// debugExtendGrunningNoP is a debug mode that extends the windows in which
+// we're _Grunning without a P in order to try to shake out bugs with code
+// assuming this state is impossible.
+const debugExtendGrunningNoP = false
+
 // Standard syscall entry used by the go syscall library and normal cgo calls.
 //
 // This is exported via linkname to assembly in the syscall package and x/sys.
@@ -4770,6 +4775,9 @@ func entersyscallblock() {
 	// <--
 	// Caution: we're in a small window where we are in _Grunning without a P.
 	// -->
+	if debugExtendGrunningNoP {
+		usleep(10)
+	}
 	casgstatus(gp, _Grunning, _Gsyscall)
 	if gp.syscallsp < gp.stack.lo || gp.stack.hi < gp.syscallsp {
 		systemstack(func() {
@@ -4852,6 +4860,9 @@ func exitsyscall() {
 	// Caution: we're in a window where we may be in _Grunning without a P.
 	// Either we will grab a P or call exitsyscall0, where we'll switch to
 	// _Grunnable.
+	if debugExtendGrunningNoP {
+		usleep(10)
+	}
 
 	// Grab and clear our old P.
 	oldp := gp.m.oldp.ptr()
@@ -7496,23 +7507,36 @@ func runqgrab(pp *p, batch *[256]guintptr, batchHead uint32, stealRunNextG bool)
 				// Try to steal from pp.runnext.
 				if next := pp.runnext; next != 0 {
 					if pp.status == _Prunning {
-						// Sleep to ensure that pp isn't about to run the g
-						// we are about to steal.
-						// The important use case here is when the g running
-						// on pp ready()s another g and then almost
-						// immediately blocks. Instead of stealing runnext
-						// in this window, back off to give pp a chance to
-						// schedule runnext. This will avoid thrashing gs
-						// between different Ps.
-						// A sync chan send/recv takes ~50ns as of time of
-						// writing, so 3us gives ~50x overshoot.
-						if !osHasLowResTimer {
-							usleep(3)
-						} else {
-							// On some platforms system timer granularity is
-							// 1-15ms, which is way too much for this
-							// optimization. So just yield.
-							osyield()
+						if mp := pp.m.ptr(); mp != nil {
+							if gp := mp.curg; gp == nil || readgstatus(gp)&^_Gscan != _Gsyscall {
+								// Sleep to ensure that pp isn't about to run the g
+								// we are about to steal.
+								// The important use case here is when the g running
+								// on pp ready()s another g and then almost
+								// immediately blocks. Instead of stealing runnext
+								// in this window, back off to give pp a chance to
+								// schedule runnext. This will avoid thrashing gs
+								// between different Ps.
+								// A sync chan send/recv takes ~50ns as of time of
+								// writing, so 3us gives ~50x overshoot.
+								// If curg is nil, we assume that the P is likely
+								// to be in the scheduler. If curg isn't nil and isn't
+								// in a syscall, then it's either running, waiting, or
+								// runnable. In this case we want to sleep because the
+								// P might either call into the scheduler soon (running),
+								// or already is (since we found a waiting or runnable
+								// goroutine hanging off of a running P, suggesting it
+								// either recently transitioned out of running, or will
+								// transition to running shortly).
+								if !osHasLowResTimer {
+									usleep(3)
+								} else {
+									// On some platforms system timer granularity is
+									// 1-15ms, which is way too much for this
+									// optimization. So just yield.
+									osyield()
+								}
+							}
 						}
 					}
 					if !pp.runnext.cas(next, 0) {
