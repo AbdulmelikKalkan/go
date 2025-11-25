@@ -57,6 +57,7 @@ func printuint(uint64)
 func printcomplex128(complex128)
 func printcomplex64(complex64)
 func printstring(string)
+func printquoted(string)
 func printpointer(any)
 func printuintptr(uintptr)
 func printiface(any)
@@ -292,9 +293,10 @@ func libfuzzerHookEqualFold(string, string, uint)
 func addCovMeta(p unsafe.Pointer, len uint32, hash [16]byte, pkpath string, pkgId int, cmode uint8, cgran uint8) uint32
 
 // architecture variants
+var x86HasAVX bool
+var x86HasFMA bool
 var x86HasPOPCNT bool
 var x86HasSSE41 bool
-var x86HasFMA bool
 var armHasVFPv4 bool
 var arm64HasATOMICS bool
 var loong64HasLAMCAS bool

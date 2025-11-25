@@ -54,9 +54,11 @@ var depsRules = `
 	  internal/goexperiment,
 	  internal/goos,
 	  internal/goversion,
+	  internal/itoa,
 	  internal/nettrace,
 	  internal/platform,
 	  internal/profilerecord,
+	  internal/runtime/pprof/label,
 	  internal/syslist,
 	  internal/trace/tracev2,
 	  internal/trace/traceviewer/format,
@@ -71,6 +73,8 @@ var depsRules = `
 	internal/byteorder, internal/cpu, internal/goarch < internal/chacha8rand;
 	internal/goarch, math/bits < internal/strconv;
 
+	internal/cpu, internal/strconv < simd;
+
 	# RUNTIME is the core runtime group of packages, all of them very light-weight.
 	internal/abi,
 	internal/chacha8rand,
@@ -80,7 +84,9 @@ var depsRules = `
 	internal/godebugs,
 	internal/goexperiment,
 	internal/goos,
+	internal/itoa,
 	internal/profilerecord,
+	internal/runtime/pprof/label,
 	internal/strconv,
 	internal/trace/tracev2,
 	math/bits,
@@ -668,7 +674,8 @@ var depsRules = `
 	< net/http/fcgi;
 
 	# Profiling
-	FMT, compress/gzip, encoding/binary, sort, text/tabwriter
+	internal/runtime/pprof/label, runtime, context < internal/runtime/pprof;
+	FMT, compress/gzip, encoding/binary, sort, text/tabwriter, internal/runtime/pprof, internal/runtime/pprof/label
 	< runtime/pprof;
 
 	OS, compress/gzip, internal/lazyregexp
@@ -696,6 +703,9 @@ var depsRules = `
 
 	FMT, DEBUG, flag, runtime/trace, internal/sysinfo, math/rand
 	< testing;
+
+	testing, math
+	< simd/internal/test_helpers;
 
 	log/slog, testing
 	< testing/slogtest;
