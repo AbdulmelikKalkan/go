@@ -86,8 +86,11 @@ type pkgWriter struct {
 	typDecls map[*types2.TypeName]typeDeclGen
 
 	// linknames maps package-scope objects to their linker symbol name,
-	// if specified by a //go:linkname directive.
-	linknames map[types2.Object]string
+	// if specified by a //go:linkname or //go:linknamestd directive.
+	linknames map[types2.Object]struct {
+		remote string
+		std    bool
+	}
 
 	// cgoPragmas accumulates any //go:cgo_* pragmas that need to be
 	// passed through to cmd/link.
@@ -114,7 +117,10 @@ func newPkgWriter(m posMap, pkg *types2.Package, info *types2.Info, otherInfo ma
 		funDecls: make(map[*types2.Func]*syntax.FuncDecl),
 		typDecls: make(map[*types2.TypeName]typeDeclGen),
 
-		linknames: make(map[types2.Object]string),
+		linknames: make(map[types2.Object]struct {
+			remote string
+			std    bool
+		}),
 	}
 }
 
@@ -846,6 +852,19 @@ func (w *writer) doObj(wext *writer, obj types2.Object) pkgbits.CodeObj {
 		sig := obj.Type().(*types2.Signature)
 
 		w.pos(obj)
+		if isGenericMethod(sig) {
+			// otherwise the reader won't know to expect the flag
+			assert(w.Version().Has(pkgbits.GenericMethods))
+			w.Bool(true) // generic method
+
+			w.selector(obj)
+			w.typeParamNames(sig.RecvTypeParams())
+			w.param(sig.Recv())
+		} else {
+			if w.Version().Has(pkgbits.GenericMethods) {
+				w.Bool(false) // function
+			}
+		}
 		w.typeParamNames(sig.TypeParams())
 		w.signature(sig)
 		w.pos(decl)
@@ -878,9 +897,24 @@ func (w *writer) doObj(wext *writer, obj types2.Object) pkgbits.CodeObj {
 		wext.typeExt(obj)
 		w.typ(named.Underlying())
 
-		w.Len(named.NumMethods())
-		for i := 0; i < named.NumMethods(); i++ {
-			w.method(wext, named.Method(i))
+		// separate generic and non-generic methods
+		var methods, gmethods []*types2.Func
+		for i := range named.NumMethods() {
+			m := named.Method(i)
+			if isGenericMethod(m.Type()) {
+				gmethods = append(gmethods, m)
+			} else {
+				methods = append(methods, m)
+			}
+		}
+		// encode non-generic methods inline
+		w.Len(len(methods))
+		for _, m := range methods {
+			w.method(wext, m)
+		}
+		// encode generic methods elsewhere
+		for _, m := range gmethods {
+			w.p.objIdx(m)
 		}
 
 		return pkgbits.ObjType
@@ -904,10 +938,9 @@ func (w *writer) objDict(obj types2.Object, dict *writerDict) {
 	w.Len(len(dict.implicits))
 
 	tparams := objTypeParams(obj)
-	ntparams := tparams.Len()
-	w.Len(ntparams)
-	for i := 0; i < ntparams; i++ {
-		w.typ(tparams.At(i).Constraint())
+	w.Len(len(tparams))
+	for _, tparam := range tparams {
+		w.typ(tparam.Constraint())
 	}
 
 	nderived := len(dict.derived)
@@ -937,8 +970,7 @@ func (w *writer) objDict(obj types2.Object, dict *writerDict) {
 	for _, implicit := range dict.implicits {
 		w.Bool(implicit.Underlying().(*types2.Interface).IsMethodSet())
 	}
-	for i := 0; i < ntparams; i++ {
-		tparam := tparams.At(i)
+	for _, tparam := range tparams {
 		w.Bool(tparam.Underlying().(*types2.Interface).IsMethodSet())
 	}
 
@@ -1160,7 +1192,9 @@ func (w *writer) varExt(obj *types2.Var) {
 func (w *writer) linkname(obj types2.Object) {
 	w.Sync(pkgbits.SyncLinkname)
 	w.Int64(-1)
-	w.String(w.p.linknames[obj])
+	info := w.p.linknames[obj]
+	w.String(info.remote)
+	w.Bool(info.std)
 }
 
 func (w *writer) pragmaFlag(p ir.PragmaFlag) {
@@ -2684,16 +2718,15 @@ type declCollector struct {
 }
 
 func (c *declCollector) withTParams(obj types2.Object) *declCollector {
-	tparams := objTypeParams(obj)
-	n := tparams.Len()
-	if n == 0 {
+	tparams := slices.Concat(objRecvTypeParams(obj), objTypeParams(obj))
+	if len(tparams) == 0 {
 		return c
 	}
 
 	copy := *c
 	copy.implicits = copy.implicits[:len(copy.implicits):len(copy.implicits)]
-	for i := 0; i < n; i++ {
-		copy.implicits = append(copy.implicits, tparams.At(i))
+	for _, tparam := range tparams {
+		copy.implicits = append(copy.implicits, tparam)
 	}
 	return &copy
 }
@@ -2784,26 +2817,33 @@ func (pw *pkgWriter) collectDecls(noders []*noder) {
 		pw.cgoPragmas = append(pw.cgoPragmas, p.pragcgobuf...)
 
 		for _, l := range p.linknames {
+			directive := "go:linkname"
+			if l.std {
+				directive = "go:linknamestd"
+			}
 			if !file.importedUnsafe {
-				pw.errorf(l.pos, "//go:linkname only allowed in Go files that import \"unsafe\"")
+				pw.errorf(l.pos, "//%s only allowed in Go files that import \"unsafe\"", directive)
 				continue
 			}
 			if strings.Contains(l.remote, "[") && strings.Contains(l.remote, "]") {
-				pw.errorf(l.pos, "//go:linkname reference of an instantiation is not allowed")
+				pw.errorf(l.pos, "//%s reference of an instantiation is not allowed", directive)
 				continue
 			}
 
 			switch obj := pw.curpkg.Scope().Lookup(l.local).(type) {
 			case *types2.Func, *types2.Var:
 				if _, ok := pw.linknames[obj]; !ok {
-					pw.linknames[obj] = l.remote
+					pw.linknames[obj] = struct {
+						remote string
+						std    bool
+					}{l.remote, l.std}
 				} else {
-					pw.errorf(l.pos, "duplicate //go:linkname for %s", l.local)
+					pw.errorf(l.pos, "duplicate //%s for %s", directive, l.local)
 				}
 
 			default:
 				if types.AllowsGoVersion(1, 18) {
-					pw.errorf(l.pos, "//go:linkname must refer to declared function or variable")
+					pw.errorf(l.pos, "//%s must refer to declared function or variable", directive)
 				}
 			}
 		}
@@ -3119,24 +3159,40 @@ func fieldIndex(info *types2.Info, str *types2.Struct, key *syntax.Name) int {
 	panic(fmt.Sprintf("%s: %v is not a field of %v", key.Pos(), field, str))
 }
 
+// objRecvTypeParams returns the receiver type parameters on the given object.
+func objRecvTypeParams(obj types2.Object) []*types2.TypeParam {
+	if f, ok := obj.(*types2.Func); ok {
+		return asTypeParamSlice(f.Signature().RecvTypeParams())
+	}
+	return nil
+}
+
 // objTypeParams returns the type parameters on the given object.
-func objTypeParams(obj types2.Object) *types2.TypeParamList {
-	switch obj := obj.(type) {
+func objTypeParams(obj types2.Object) []*types2.TypeParam {
+	switch t := obj.(type) {
 	case *types2.Func:
-		sig := obj.Type().(*types2.Signature)
-		if sig.Recv() != nil {
-			return sig.RecvTypeParams()
-		}
-		return sig.TypeParams()
+		return asTypeParamSlice(t.Signature().TypeParams())
 	case *types2.TypeName:
 		switch t := obj.Type().(type) {
 		case *types2.Named:
-			return t.TypeParams()
+			return asTypeParamSlice(t.TypeParams())
 		case *types2.Alias:
-			return t.TypeParams()
+			return asTypeParamSlice(t.TypeParams())
 		}
 	}
 	return nil
+}
+
+// asTypeParamSlice unpacks a types2.TypeParamList to a []types2.TypeParam
+func asTypeParamSlice(l *types2.TypeParamList) []*types2.TypeParam {
+	if l.Len() == 0 {
+		return nil
+	}
+	s := make([]*types2.TypeParam, l.Len())
+	for i := range l.Len() {
+		s[i] = l.At(i)
+	}
+	return s
 }
 
 // splitNamed decomposes a use of a defined type into its original
