@@ -628,6 +628,8 @@ const (
 	OpAMD64VFNMADD231SD
 	OpAMD64MINSD
 	OpAMD64MINSS
+	OpAMD64MAXSD
+	OpAMD64MAXSS
 	OpAMD64SBBQcarrymask
 	OpAMD64SBBLcarrymask
 	OpAMD64SETEQ
@@ -785,6 +787,14 @@ const (
 	OpAMD64XADDQlock
 	OpAMD64AddTupleFirst32
 	OpAMD64AddTupleFirst64
+	OpAMD64ADDLlock
+	OpAMD64ADDQlock
+	OpAMD64SUBLlock
+	OpAMD64SUBQlock
+	OpAMD64INCLlock
+	OpAMD64INCQlock
+	OpAMD64DECLlock
+	OpAMD64DECQlock
 	OpAMD64CMPXCHGLlock
 	OpAMD64CMPXCHGQlock
 	OpAMD64ANDBlock
@@ -4606,6 +4616,8 @@ const (
 	OpARM64CSINC
 	OpARM64CSINV
 	OpARM64CSNEG
+	OpARM64FCSELD
+	OpARM64FCSELS
 	OpARM64CSETM
 	OpARM64CCMP
 	OpARM64CCMN
@@ -6660,6 +6672,10 @@ const (
 	OpMin32F
 	OpMax64F
 	OpMax32F
+	OpMin64FSel
+	OpMin32FSel
+	OpMax64FSel
+	OpMax32FSel
 	OpFMA
 	OpPhi
 	OpCopy
@@ -18248,6 +18264,38 @@ var opcodeTable = [...]opInfo{
 		},
 	},
 	{
+		name:         "MAXSD",
+		argLen:       2,
+		resultInArg0: true,
+		earlyOk:      true,
+		asm:          x86.AMAXSD,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, regMask{v1: 2147418112, v2: 0}}, // X0 X1 X2 X3 X4 X5 X6 X7 X8 X9 X10 X11 X12 X13 X14
+				{1, regMask{v1: 2147418112, v2: 0}}, // X0 X1 X2 X3 X4 X5 X6 X7 X8 X9 X10 X11 X12 X13 X14
+			},
+			outputs: []outputInfo{
+				{0, regMask{v1: 2147418112, v2: 0}}, // X0 X1 X2 X3 X4 X5 X6 X7 X8 X9 X10 X11 X12 X13 X14
+			},
+		},
+	},
+	{
+		name:         "MAXSS",
+		argLen:       2,
+		resultInArg0: true,
+		earlyOk:      true,
+		asm:          x86.AMAXSS,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, regMask{v1: 2147418112, v2: 0}}, // X0 X1 X2 X3 X4 X5 X6 X7 X8 X9 X10 X11 X12 X13 X14
+				{1, regMask{v1: 2147418112, v2: 0}}, // X0 X1 X2 X3 X4 X5 X6 X7 X8 X9 X10 X11 X12 X13 X14
+			},
+			outputs: []outputInfo{
+				{0, regMask{v1: 2147418112, v2: 0}}, // X0 X1 X2 X3 X4 X5 X6 X7 X8 X9 X10 X11 X12 X13 X14
+			},
+		},
+	},
+	{
 		name:    "SBBQcarrymask",
 		argLen:  1,
 		earlyOk: true,
@@ -20539,6 +20587,130 @@ var opcodeTable = [...]opInfo{
 		name:   "AddTupleFirst64",
 		argLen: 2,
 		reg:    regInfo{},
+	},
+	{
+		name:           "ADDLlock",
+		auxType:        auxSymOff,
+		argLen:         3,
+		clobberFlags:   true,
+		faultOnNilArg0: true,
+		hasSideEffects: true,
+		symEffect:      SymRdWr,
+		asm:            x86.AADDL,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{1, regMask{v1: 49151, v2: 0}},             // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R15
+				{0, regMask{v1: 72057594037993471, v2: 0}}, // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 g R15 SB
+			},
+		},
+	},
+	{
+		name:           "ADDQlock",
+		auxType:        auxSymOff,
+		argLen:         3,
+		clobberFlags:   true,
+		faultOnNilArg0: true,
+		hasSideEffects: true,
+		symEffect:      SymRdWr,
+		asm:            x86.AADDQ,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{1, regMask{v1: 49151, v2: 0}},             // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R15
+				{0, regMask{v1: 72057594037993471, v2: 0}}, // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 g R15 SB
+			},
+		},
+	},
+	{
+		name:           "SUBLlock",
+		auxType:        auxSymOff,
+		argLen:         3,
+		clobberFlags:   true,
+		faultOnNilArg0: true,
+		hasSideEffects: true,
+		symEffect:      SymRdWr,
+		asm:            x86.ASUBL,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{1, regMask{v1: 49151, v2: 0}},             // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R15
+				{0, regMask{v1: 72057594037993471, v2: 0}}, // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 g R15 SB
+			},
+		},
+	},
+	{
+		name:           "SUBQlock",
+		auxType:        auxSymOff,
+		argLen:         3,
+		clobberFlags:   true,
+		faultOnNilArg0: true,
+		hasSideEffects: true,
+		symEffect:      SymRdWr,
+		asm:            x86.ASUBQ,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{1, regMask{v1: 49151, v2: 0}},             // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R15
+				{0, regMask{v1: 72057594037993471, v2: 0}}, // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 g R15 SB
+			},
+		},
+	},
+	{
+		name:           "INCLlock",
+		auxType:        auxSymOff,
+		argLen:         2,
+		clobberFlags:   true,
+		faultOnNilArg0: true,
+		hasSideEffects: true,
+		symEffect:      SymRdWr,
+		asm:            x86.AINCL,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, regMask{v1: 72057594037993471, v2: 0}}, // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 g R15 SB
+			},
+		},
+	},
+	{
+		name:           "INCQlock",
+		auxType:        auxSymOff,
+		argLen:         2,
+		clobberFlags:   true,
+		faultOnNilArg0: true,
+		hasSideEffects: true,
+		symEffect:      SymRdWr,
+		asm:            x86.AINCQ,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, regMask{v1: 72057594037993471, v2: 0}}, // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 g R15 SB
+			},
+		},
+	},
+	{
+		name:           "DECLlock",
+		auxType:        auxSymOff,
+		argLen:         2,
+		clobberFlags:   true,
+		faultOnNilArg0: true,
+		hasSideEffects: true,
+		symEffect:      SymRdWr,
+		asm:            x86.ADECL,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, regMask{v1: 72057594037993471, v2: 0}}, // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 g R15 SB
+			},
+		},
+	},
+	{
+		name:           "DECQlock",
+		auxType:        auxSymOff,
+		argLen:         2,
+		clobberFlags:   true,
+		faultOnNilArg0: true,
+		hasSideEffects: true,
+		symEffect:      SymRdWr,
+		asm:            x86.ADECQ,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, regMask{v1: 72057594037993471, v2: 0}}, // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 g R15 SB
+			},
+		},
 	},
 	{
 		name:           "CMPXCHGLlock",
@@ -79425,6 +79597,38 @@ var opcodeTable = [...]opInfo{
 		},
 	},
 	{
+		name:    "FCSELD",
+		auxType: auxCCop,
+		argLen:  3,
+		earlyOk: true,
+		asm:     arm64.AFCSELD,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, regMask{v1: 9223372034707292160, v2: 0}}, // F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15 F16 F17 F18 F19 F20 F21 F22 F23 F24 F25 F26 F27 F28 F29 F30 F31
+				{1, regMask{v1: 9223372034707292160, v2: 0}}, // F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15 F16 F17 F18 F19 F20 F21 F22 F23 F24 F25 F26 F27 F28 F29 F30 F31
+			},
+			outputs: []outputInfo{
+				{0, regMask{v1: 9223372034707292160, v2: 0}}, // F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15 F16 F17 F18 F19 F20 F21 F22 F23 F24 F25 F26 F27 F28 F29 F30 F31
+			},
+		},
+	},
+	{
+		name:    "FCSELS",
+		auxType: auxCCop,
+		argLen:  3,
+		earlyOk: true,
+		asm:     arm64.AFCSELS,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, regMask{v1: 9223372034707292160, v2: 0}}, // F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15 F16 F17 F18 F19 F20 F21 F22 F23 F24 F25 F26 F27 F28 F29 F30 F31
+				{1, regMask{v1: 9223372034707292160, v2: 0}}, // F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15 F16 F17 F18 F19 F20 F21 F22 F23 F24 F25 F26 F27 F28 F29 F30 F31
+			},
+			outputs: []outputInfo{
+				{0, regMask{v1: 9223372034707292160, v2: 0}}, // F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15 F16 F17 F18 F19 F20 F21 F22 F23 F24 F25 F26 F27 F28 F29 F30 F31
+			},
+		},
+	},
+	{
 		name:    "CSETM",
 		auxType: auxCCop,
 		argLen:  1,
@@ -106888,6 +107092,26 @@ var opcodeTable = [...]opInfo{
 	},
 	{
 		name:    "Max32F",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "Min64FSel",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "Min32FSel",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "Max64FSel",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "Max32FSel",
 		argLen:  2,
 		generic: true,
 	},
