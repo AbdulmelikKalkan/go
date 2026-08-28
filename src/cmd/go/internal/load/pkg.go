@@ -75,7 +75,7 @@ type PackagePublic struct {
 	ConflictDir   string                `json:",omitempty"` // Dir is hidden by this other directory
 	ForTest       string                `json:",omitempty"` // package is only for use in named test
 	Export        string                `json:",omitempty"` // file containing export data (set by go list -export)
-	BuildID       string                `json:",omitempty"` // build ID of the compiled package (set by go list -export)
+	BuildID       string                `json:",omitempty"` // build ID of the exported package (set by go list -export)
 	Module        *modinfo.ModulePublic `json:",omitempty"` // info about package's module, if any
 	Match         []string              `json:",omitempty"` // command-line patterns matching this package
 	Goroot        bool                  `json:",omitempty"` // is this package found in the Go root?
@@ -2449,6 +2449,13 @@ func (p *Package) setBuildInfo(ctx context.Context, f *modfetch.Fetcher, autoVCS
 	}
 	appendSetting("-buildmode", buildmode)
 	appendSetting("-compiler", cfg.BuildContext.Compiler)
+	if cfg.BuildMod == "vendor" {
+		// https://go.dev/issue/46400
+		// https://go.dev/issue/57782
+		// We can't guarantee that dependencies have been unmodified in vendor mode.
+		// -mod=readonly and -mod=mod are both trusted to the same degree.
+		appendSetting("-mod", "vendor")
+	}
 	if gccgoflags := BuildGccgoflags.String(); gccgoflags != "" && cfg.BuildContext.Compiler == "gccgo" {
 		appendSetting("-gccgoflags", gccgoflags)
 	}
