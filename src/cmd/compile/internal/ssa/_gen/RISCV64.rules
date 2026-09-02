@@ -379,11 +379,11 @@
 
 // Unroll zeroing in medium size (at most 192 bytes i.e. 3 cachelines)
 (Zero [s] {t} ptr mem) && s <= 24*ssa.MoveSize(t.Alignment(), config) =>
-	(LoweredZero [ssa.MakeValAndOff(int32(s),int32(t.Alignment()))] ptr mem)
+	(LoweredZero [s] {t.Alignment()} ptr mem)
 
 // Generic zeroing uses a loop
 (Zero [s] {t} ptr mem) && s > 24*ssa.MoveSize(t.Alignment(), config) =>
-	(LoweredZeroLoop [ssa.MakeValAndOff(int32(s),int32(t.Alignment()))] ptr mem)
+	(LoweredZeroLoop [s] {t.Alignment()} ptr mem)
 
 // Checks
 (IsNonNil ...) => (SNEZ ...)
@@ -449,12 +449,12 @@
 // Generic move
 (Move [s] {t} dst src mem) && s > 0 && s <= 3*8*ssa.MoveSize(t.Alignment(), config)
 	&& ssa.LogLargeCopyValue(v, s) =>
-	(LoweredMove [ssa.MakeValAndOff(int32(s),int32(t.Alignment()))] dst src mem)
+	(LoweredMove [s] {t.Alignment()} dst src mem)
 
 // Generic move uses a loop
 (Move [s] {t} dst src mem) && s > 3*8*ssa.MoveSize(t.Alignment(), config)
 	&& ssa.LogLargeCopyValue(v, s) =>
-	(LoweredMoveLoop [ssa.MakeValAndOff(int32(s),int32(t.Alignment()))] dst src mem)
+	(LoweredMoveLoop [s] {t.Alignment()} dst src mem)
 
 // Boolean ops; 0=false, 1=true
 (AndB ...) => (AND ...)
@@ -720,6 +720,14 @@
 (SRLI [x] (MOVBUreg y)) && x >=  8 => (MOVDconst [0])
 (SRLI [x] (MOVHUreg y)) && x >= 16 => (MOVDconst [0])
 (SRLI [x] (MOVWUreg y)) && x >= 32 => (MOVDconst [0])
+
+// Remove unnecessary masking with shifts.
+(SLL  x (ANDI [63] y)) => (SLL  x y)
+(SRL  x (ANDI [63] y)) => (SRL  x y)
+(SRA  x (ANDI [63] y)) => (SRA  x y)
+(SLLW x (ANDI [31] y)) => (SLLW x y)
+(SRLW x (ANDI [31] y)) => (SRLW x y)
+(SRAW x (ANDI [31] y)) => (SRAW x y)
 
 // Fold constant into immediate instructions where possible.
 (ADD (MOVDconst <t> [val]) x) && ssa.Is32Bit(val) && !t.IsPtr() => (ADDI [val] x)
