@@ -156,6 +156,37 @@ func TestAddSaturatedSVE(t *testing.T) {
 	}
 }
 
+// TestSubSaturatedSVE checks that the generated saturating subtract saturates.
+func TestSubSaturatedSVE(t *testing.T) {
+	if !archsimd.ARM64.SVE() {
+		t.Skip("no sve")
+	}
+	var sx, sy, gi [32]int8
+	for i := range sx {
+		sx[i] = 100 // 100 - (-100) saturates to +127
+		sy[i] = -100
+	}
+	x, y := archsimd.LoadInt8s(sx[:]), archsimd.LoadInt8s(sy[:])
+	x.SubSaturated(y).Store(gi[:])
+	for i := 0; i < x.Len(); i++ {
+		if gi[i] != 127 {
+			t.Errorf("int8 lane %d: got %d, want 127", i, gi[i])
+		}
+	}
+	var ux, uy, gu [32]uint8
+	for i := range ux {
+		ux[i] = 10 // 10 - 20 saturates to 0
+		uy[i] = 20
+	}
+	vx, vy := archsimd.LoadUint8s(ux[:]), archsimd.LoadUint8s(uy[:])
+	vx.SubSaturated(vy).Store(gu[:])
+	for i := 0; i < vx.Len(); i++ {
+		if gu[i] != 0 {
+			t.Errorf("uint8 lane %d: got %d, want 0", i, gu[i])
+		}
+	}
+}
+
 func TestStringSVE(t *testing.T) {
 	if !archsimd.ARM64.SVE() {
 		t.Skip("no sve")
@@ -193,4 +224,166 @@ func TestStringSVE(t *testing.T) {
 	t.Logf("y=%s", y)
 	t.Logf("mx=%s", mx)
 	t.Logf("my=%s", my)
+}
+
+//go:noinline
+func keepAliveInt8s(archsimd.Int8s) {}
+
+// TestIfElseSVE checks IfElse and Masked, and that the merging peephole keeps
+// the same semantics whether or not it fires: x.Add(y).IfElse(m, x) folds into a
+// predicated add, x.Add(y).IfElse(m, z) does not, and both must agree with a
+// lane-by-lane reference.
+func TestIfElseSVE(t *testing.T) {
+	if !archsimd.ARM64.SVE() {
+		t.Skip("no sve")
+	}
+	n := archsimd.Int8s{}.Len()
+	xs, ys, zs := make([]int8, n), make([]int8, n), make([]int8, n)
+	for i := range xs {
+		xs[i] = int8(i + 1)
+		ys[i] = int8(i % 3) // active where xs[i] > ys[i], which alternates early on
+		zs[i] = int8(-i - 1)
+	}
+	x, y, z := archsimd.LoadInt8s(xs), archsimd.LoadInt8s(ys), archsimd.LoadInt8s(zs)
+	m := x.Greater(y)
+
+	got := make([]int8, n)
+	check := func(name string, v archsimd.Int8s, want func(i int, active bool) int8) {
+		t.Helper()
+		v.Store(got)
+		for i := 0; i < n; i++ {
+			if w := want(i, xs[i] > ys[i]); got[i] != w {
+				t.Errorf("%s: lane %d = %d, want %d (x=%d y=%d)", name, i, got[i], w, xs[i], ys[i])
+			}
+		}
+	}
+
+	check("IfElse", x.IfElse(m, y), func(i int, active bool) int8 {
+		if active {
+			return xs[i]
+		}
+		return ys[i]
+	})
+	check("Masked", x.Masked(m), func(i int, active bool) int8 {
+		if active {
+			return xs[i]
+		}
+		return 0
+	})
+	// Folds into the merging-predicated add.
+	check("Add.IfElse(x)", x.Add(y).IfElse(m, x), func(i int, active bool) int8 {
+		if active {
+			return xs[i] + ys[i]
+		}
+		return xs[i]
+	})
+	// Folds via commutativity.
+	check("Add.IfElse(y)", x.Add(y).IfElse(m, y), func(i int, active bool) int8 {
+		if active {
+			return xs[i] + ys[i]
+		}
+		return ys[i]
+	})
+	// Folds behind a merging MOVPRFX: the else operand is neither source.
+	check("Add.IfElse(z)", x.Add(y).IfElse(m, z), func(i int, active bool) int8 {
+		if active {
+			return xs[i] + ys[i]
+		}
+		return zs[i]
+	})
+	// ADD has no zeroing-predicated form, so Masked folds into the merging one
+	// with the zero vector as its else operand.
+	check("Add.Masked", x.Add(y).Masked(m), func(i int, active bool) int8 {
+		if active {
+			return xs[i] + ys[i]
+		}
+		return 0
+	})
+
+	// SUB is not commutative, so only an "else" operand that is the destructive
+	// one — the minuend — folds into the merging-predicated instruction.
+	check("Sub.IfElse(x)", x.Sub(y).IfElse(m, x), func(i int, active bool) int8 {
+		if active {
+			return xs[i] - ys[i]
+		}
+		return xs[i]
+	})
+	// Does not fold, and must not silently become y-x.
+	check("Sub.IfElse(y)", x.Sub(y).IfElse(m, y), func(i int, active bool) int8 {
+		if active {
+			return xs[i] - ys[i]
+		}
+		return ys[i]
+	})
+	// Does not fold: there is no prefixed form for a non-commutative operation.
+	check("Sub.IfElse(z)", x.Sub(y).IfElse(m, z), func(i int, active bool) int8 {
+		if active {
+			return xs[i] - ys[i]
+		}
+		return zs[i]
+	})
+	check("Sub.Masked", x.Sub(y).Masked(m), func(i int, active bool) int8 {
+		if active {
+			return xs[i] - ys[i]
+		}
+		return 0
+	})
+
+	// Abs is predicated-only, so its unpredicated API runs under an all-true
+	// predicate that a select can simply replace: IfElse becomes the merging
+	// form and Masked the zeroing one, each a single instruction.
+	absLane := func(v int8) int8 {
+		if v < 0 {
+			return -v
+		}
+		return v
+	}
+	check("Abs.IfElse(z)", x.Abs().IfElse(m, z), func(i int, active bool) int8 {
+		if active {
+			return absLane(xs[i])
+		}
+		return zs[i]
+	})
+	check("Abs.IfElse(x)", x.Abs().IfElse(m, x), func(i int, active bool) int8 {
+		if active {
+			return absLane(xs[i])
+		}
+		return xs[i]
+	})
+	check("Abs.Masked", x.Abs().Masked(m), func(i int, active bool) int8 {
+		if active {
+			return absLane(xs[i])
+		}
+		return 0
+	})
+
+	// The prefixed path with every operand still live afterwards, so the
+	// destination can be none of them and the merging MOVPRFX has to place the
+	// else operand itself.
+	rz := x.Add(y).IfElse(m, z)
+	keepAliveInt8s(x)
+	keepAliveInt8s(y)
+	keepAliveInt8s(z)
+	check("Add.IfElse(z) with all live", rz, func(i int, active bool) int8 {
+		if active {
+			return xs[i] + ys[i]
+		}
+		return zs[i]
+	})
+
+	// The MOVPRFX path: x must survive the destructive predicated add.
+	r := x.Add(y).IfElse(m, x)
+	keepAliveInt8s(x)
+	check("Add.IfElse(x) with x live", r, func(i int, active bool) int8 {
+		if active {
+			return xs[i] + ys[i]
+		}
+		return xs[i]
+	})
+	x.Store(got)
+	for i := 0; i < n; i++ {
+		if got[i] != xs[i] {
+			t.Errorf("x clobbered by MOVPRFX: lane %d = %d, want %d", i, got[i], xs[i])
+		}
+	}
 }
