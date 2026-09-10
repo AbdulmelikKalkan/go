@@ -23,7 +23,6 @@ import (
 	"net/textproto"
 	"net/url"
 	urlpkg "net/url"
-	"os"
 	"path"
 	"runtime"
 	"slices"
@@ -711,6 +710,7 @@ type connReader struct {
 	cond    *sync.Cond
 	inRead  bool
 	aborted bool  // set true before conn.rwc deadline is set to past
+	probing bool  // set true during conn.serve's idle probe read, when a timeout is expected
 	remain  int64 // bytes remaining
 }
 
@@ -783,6 +783,46 @@ func (cr *connReader) backgroundRead() {
 	cr.cond.Broadcast()
 }
 
+// idleBufsReleaseDelay is how long a keep-alive connection waits for
+// its next request before it is considered idle and its bufio buffers
+// are released to their pools. It trades a little extra work on
+// connections that idle past it against pinning ~8 kB of buffers on
+// every waiting connection.
+const idleBufsReleaseDelay = 50 * time.Millisecond
+
+// waitReadable blocks until data arrives on the connection, stashing
+// the byte it reads for the next connReader.Read, and reports whether
+// data arrived. It is called between requests, after the connection's
+// bufio buffers have been released to their pools, so that an idle
+// connection pins no buffer memory while it waits, possibly for a long
+// time, for the next request. A false return means the read failed
+// (EOF, a timeout, or another error) and the error has been handled by
+// handleReadErrorLocked.
+func (cr *connReader) waitReadable() (readable bool) {
+	cr.lock()
+	if cr.inRead {
+		panic("invalid concurrent connReader.waitReadable call")
+	}
+	if cr.hasByte {
+		cr.unlock()
+		return true
+	}
+	cr.inRead = true
+	cr.unlock()
+	n, err := cr.rwc.Read(cr.byteBuf[:])
+	cr.lock()
+	cr.inRead = false
+	if n == 1 {
+		cr.hasByte = true
+	}
+	if err != nil {
+		cr.handleReadErrorLocked(err)
+	}
+	cr.unlock()
+	cr.cond.Broadcast()
+	return n == 1 && err == nil
+}
+
 func (cr *connReader) abortPendingRead() {
 	cr.lock()
 	defer cr.unlock()
@@ -797,22 +837,49 @@ func (cr *connReader) abortPendingRead() {
 	cr.rwc.SetReadDeadline(time.Time{})
 }
 
+func (cr *connReader) setProbing(v bool) {
+	cr.lock()
+	cr.probing = v
+	cr.unlock()
+}
+
 func (cr *connReader) setReadLimit(remain int64) { cr.remain = remain }
 func (cr *connReader) setInfiniteReadLimit()     { cr.remain = maxInt64 }
 func (cr *connReader) hitReadLimit() bool        { return cr.remain <= 0 }
+
+// isNetTimeoutError reports whether err is a net.Error with Timeout()
+// == true, such as an error from an expired connection deadline.
+// It is used instead of checking errors.Is(err, os.ErrDeadlineExceeded)
+// because non-standard net.Conn implementations may return bespoke
+// timeout errors that don't wrap os.ErrDeadlineExceeded as net package
+// connections have since Go 1.15.
+func isNetTimeoutError(err error) bool {
+	ne, ok := errors.AsType[net.Error](err)
+	return ok && ne.Timeout()
+}
 
 // handleReadErrorLocked is called whenever a Read from the client returns a
 // non-nil error.
 //
 // The provided non-nil err is almost always io.EOF or a "use of
-// closed network connection". Any error means the connection is dead and we
-// should shut down its context. An error other than io.EOF or an expired read
-// deadline also means the connection is dead for writing, so any response
-// write still in flight is aborted.
+// closed network connection". Except for an expected timeout during the
+// serve loop's idle probe read, any error means the connection is dead
+// and we should shut down its context. An error other than io.EOF or an
+// expired read deadline also means the connection is dead for writing,
+// so any response write still in flight is aborted.
 //
 // The caller must hold connReader.mu.
 func (cr *connReader) handleReadErrorLocked(err error) {
 	if cr.conn == nil {
+		return
+	}
+	// A timeout during conn.serve's idle probe read means only that the
+	// connection has gone idle; it is otherwise fine. In particular,
+	// don't cancel the connection-level context: it is the parent of
+	// every subsequent request's context on this connection, so
+	// canceling it would deliver already-canceled contexts to all
+	// future requests.
+	if cr.probing && isNetTimeoutError(err) {
 		return
 	}
 	// io.EOF means the client half closed and may still be waiting for a
@@ -824,7 +891,7 @@ func (cr *connReader) handleReadErrorLocked(err error) {
 	// socket as writable again once a read has consumed its pending error,
 	// so a handler blocked writing a large response would otherwise block
 	// forever. See go.dev/issue/78438.
-	if err != io.EOF && !errors.Is(err, os.ErrDeadlineExceeded) {
+	if err != io.EOF && !isNetTimeoutError(err) {
 		cr.conn.rwc.SetWriteDeadline(aLongTimeAgo)
 	}
 	cr.conn.cancelCtx()
@@ -2173,17 +2240,51 @@ func (c *conn) serve(ctx context.Context) {
 			return
 		}
 
+		var idleDeadline time.Time
 		if d := c.server.idleTimeout(); d > 0 {
-			c.rwc.SetReadDeadline(time.Now().Add(d))
-		} else {
-			c.rwc.SetReadDeadline(time.Time{})
+			idleDeadline = time.Now().Add(d)
 		}
 
 		// Wait for the connection to become readable again before trying to
 		// read the next request. This prevents a ReadHeaderTimeout or
 		// ReadTimeout from starting until the first bytes of the next request
 		// have been received.
-		if _, err := c.bufr.Peek(4); err != nil {
+		//
+		// The wait runs in two phases. First wait briefly with the
+		// connection's bufio buffers still attached: on a busy
+		// connection the next request typically arrives almost
+		// immediately, and this keeps the buffer release below off the
+		// hot path. If the connection then still has nothing buffered,
+		// it has gone idle, possibly for a long time, so release its
+		// bufio.Reader and Writer (~8 kB of per-connection memory
+		// holding no data) to their pools for the rest of the wait.
+		// The byte read by waitReadable is stashed in the connReader
+		// and yielded by its next Read after fresh buffers are
+		// acquired.
+		shortDeadline := time.Now().Add(idleBufsReleaseDelay)
+		if !idleDeadline.IsZero() && idleDeadline.Before(shortDeadline) {
+			shortDeadline = idleDeadline
+		}
+		c.rwc.SetReadDeadline(shortDeadline)
+		c.r.setProbing(true)
+		_, peekErr := c.bufr.Peek(4)
+		c.r.setProbing(false)
+		if isNetTimeoutError(peekErr) && (idleDeadline.IsZero() || time.Now().Before(idleDeadline)) {
+			c.rwc.SetReadDeadline(idleDeadline)
+			if c.bufr.Buffered() == 0 && c.bufw.Buffered() == 0 {
+				putBufioReader(c.bufr)
+				c.bufr = nil
+				putBufioWriter(c.bufw)
+				c.bufw = nil
+				if !c.r.waitReadable() {
+					return
+				}
+				c.bufr = newBufioReader(c.r)
+				c.bufw = newBufioWriterSize(checkConnErrorWriter{c}, 4<<10)
+			}
+			_, peekErr = c.bufr.Peek(4)
+		}
+		if peekErr != nil {
 			return
 		}
 
