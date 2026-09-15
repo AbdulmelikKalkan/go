@@ -223,6 +223,14 @@ var operationPool = sync.Pool{
 // handling cancellation if necessary.
 func (fd *FD) waitIO(o *operation) error {
 	if o.o.HEvent != 0 {
+		// Close may have tried to cancel I/O before this request was
+		// submitted. Retry cancellation now that the request is pending.
+		if fd.kind == kindPipe && fd.closing() {
+			if err := syscall.CancelIoEx(fd.Sysfd, &o.o); err != nil && err != syscall.ERROR_NOT_FOUND {
+				// TODO: maybe do something else, but panic.
+				panic(err)
+			}
+		}
 		// The overlapped handle is not added to the runtime poller,
 		// the only way to wait for the IO to complete is block until
 		// the overlapped event is signaled.
@@ -259,6 +267,9 @@ func (fd *FD) execIO(
 	submit func(o *operation) (uint32, error),
 	pinPtrs ...any,
 ) (int, error) {
+	if err := fd.ensureInit(); err != nil {
+		return 0, err
+	}
 	// Notify runtime netpoll about starting IO.
 	err := fd.pd.prepare(mode, fd.isFile)
 	if err != nil {
@@ -327,7 +338,7 @@ func (fd *FD) execIO(
 			err = waitErr
 		} else if fd.kind == kindPipe && fd.closing() {
 			// Close uses CancelIoEx to interrupt concurrent I/O for pipes.
-			// If the fd is a pipe and the Write was interrupted by CancelIoEx,
+			// If the fd is a pipe and the I/O was interrupted by CancelIoEx,
 			// we assume it is interrupted by Close.
 			err = errClosing(fd.isFile)
 		}
@@ -352,6 +363,15 @@ type FD struct {
 
 	// I/O poller.
 	pd pollDesc
+
+	// lazyInit is set by Init before the FD is made available to callers.
+	// initOnce serializes first use; initMu protects initialization against
+	// Close and DisassociateIOCP. Close cancels I/O before waiting for initMu,
+	// and DisassociateIOCP only tries to lock it.
+	lazyInit bool
+	initOnce sync.Once
+	initMu   sync.Mutex
+	skipIOCP bool // protected by initMu
 
 	// The file offset for the next read or write.
 	// Overlapped IO operations don't use the real file pointer,
@@ -441,7 +461,9 @@ const (
 // or "file", "console", or "pipe".
 // The overlapped argument reports whether the handle was opened for overlapped I/O.
 // Such handles use the runtime poller when possible, or explicit events otherwise.
-func (fd *FD) Init(net string, overlapped bool) error {
+// If overlapped is nil, mode detection and poller initialization are deferred
+// until first use.
+func (fd *FD) Init(net string, overlapped *bool) error {
 	if initErr != nil {
 		return initErr
 	}
@@ -458,18 +480,48 @@ func (fd *FD) Init(net string, overlapped bool) error {
 		fd.kind = kindNet
 	}
 	fd.isFile = fd.kind != kindNet
-	fd.isBlocking = !overlapped
+	fd.lazyInit = overlapped == nil
+	fd.isBlocking = overlapped == nil || !*overlapped
 
-	if !overlapped {
+	if fd.isBlocking {
 		return nil
 	}
 	return fd.initIOCP()
 }
 
+// ensureInit resolves the I/O mode and attempts poller initialization on first
+// use. The caller must hold an FD reference throughout this call and its I/O.
+func (fd *FD) ensureInit() error {
+	if !fd.lazyInit {
+		return nil
+	}
+	fd.initOnce.Do(func() {
+		fd.initMu.Lock()
+		defer fd.initMu.Unlock()
+		if fd.closing() {
+			return
+		}
+
+		// This query may block behind synchronous I/O, including I/O in
+		// another process. Close cancels I/O before waiting for initMu,
+		// and raw-handle access does not wait for it.
+		overlapped, _ := windows.IsNonblock(fd.Sysfd)
+		fd.isBlocking = !overlapped
+		if overlapped && !fd.skipIOCP && !fd.closing() {
+			// Like os.NewFile's eager initialization, association failures
+			// fall back to event-backed I/O rather than failing the operation.
+			_ = fd.initIOCP()
+		}
+	})
+	if fd.closing() {
+		return errClosing(fd.isFile)
+	}
+	return nil
+}
+
 // initIOCP sets up the runtime poller and completion notification modes for an
-// overlapped handle. It must be called before the FD is used concurrently.
-// A nil error does not imply association: if the existing notification modes
-// cannot be determined, the handle is left unassociated to use event-backed I/O.
+// overlapped handle. If the existing notification modes cannot be determined,
+// it leaves the handle unassociated for event-backed I/O.
 func (fd *FD) initIOCP() error {
 	var modes uint32
 	if fd.KeepFileCompletionModes {
@@ -492,13 +544,13 @@ func (fd *FD) initIOCP() error {
 	if err := fd.pd.init(fd); err != nil {
 		return err
 	}
+	fd.associated = true
 
 	if !fd.KeepFileCompletionModes {
 		// Only change notification modes after association succeeds.
 		modes = fd.setFileCompletionModes()
 	}
 	fd.waitOnSuccess = modes&syscall.FILE_SKIP_COMPLETION_PORT_ON_SUCCESS == 0
-	fd.associated = true
 	return nil
 }
 
@@ -543,6 +595,16 @@ func (fd *FD) DisassociateIOCP() error {
 	}
 	defer fd.readWriteUnlock()
 
+	if fd.lazyInit {
+		if !fd.initMu.TryLock() {
+			// A deadline setter can initialize without holding the I/O locks.
+			return errors.New("can't disassociate the handle while initialization is in progress")
+		}
+		defer fd.initMu.Unlock()
+		// If initialization has not started, suppress future association
+		// without querying the handle's mode.
+		fd.skipIOCP = true
+	}
 	if !fd.associated {
 		// Nothing to disassociate.
 		return nil
@@ -590,7 +652,14 @@ func (fd *FD) Close() error {
 		syscall.CancelIoEx(fd.Sysfd, nil)
 	}
 	// unblock pending reader and writer
-	fd.pd.evict()
+	if fd.lazyInit {
+		// Cancel before waiting for initialization, then evict its descriptor.
+		fd.initMu.Lock()
+		fd.pd.evict()
+		fd.initMu.Unlock()
+	} else {
+		fd.pd.evict()
+	}
 	err := fd.decref()
 	// Wait until the descriptor is closed. If this was the only
 	// reference, it is already closed.
@@ -1227,6 +1296,9 @@ func (fd *FD) Seek(offset int64, whence int) (int64, error) {
 	}
 	defer fd.readWriteUnlock()
 
+	if err := fd.ensureInit(); err != nil {
+		return 0, err
+	}
 	if !fd.isBlocking {
 		// Windows doesn't use the file pointer for overlapped file handles,
 		// there is no point on calling syscall.Seek.
