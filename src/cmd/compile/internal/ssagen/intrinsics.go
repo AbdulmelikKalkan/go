@@ -2623,10 +2623,6 @@ func IsIntrinsicSym(sym *types.Sym) bool {
 // directly generate code for it. So we just fill in the body with a call
 // to fn.
 func GenIntrinsicBody(fn *ir.Func) {
-	if ir.CurFunc != nil {
-		base.FatalfAt(fn.Pos(), "enqueueFunc %v inside %v", fn, ir.CurFunc)
-	}
-
 	if base.Flag.LowerR != 0 {
 		fmt.Println("generate intrinsic for", ir.FuncName(fn))
 	}
@@ -2645,7 +2641,7 @@ func GenIntrinsicBody(fn *ir.Func) {
 	call := ir.NewCallExpr(pos, ir.OCALLFUNC, fn.Nname, nil)
 	call.Args = ir.RecvParamNames(ft)
 	call.IsDDD = ft.IsVariadic()
-	typecheck.Exprs(call.Args)
+	typecheck.Exprs(fn, call.Args)
 	call.SetTypecheck(1)
 	call.SetWalked(true)
 	ret = call
@@ -2665,7 +2661,5 @@ func GenIntrinsicBody(fn *ir.Func) {
 		ir.DumpList("generate intrinsic body", fn.Body)
 	}
 
-	ir.CurFunc = fn
-	typecheck.Stmts(fn.Body)
-	ir.CurFunc = nil // we know CurFunc is nil at entry
+	typecheck.Stmts(fn, fn.Body)
 }

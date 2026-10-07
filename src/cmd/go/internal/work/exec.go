@@ -1555,7 +1555,6 @@ type vetConfig struct {
 // exportConfig is the configuration passed to the export tool describing a single package.
 type exportConfig struct {
 	ImportPath  string            // package path
-	Compiler    string            // gc or gccgo, provided to makeTypesImporter
 	GoVersion   string            // minimum required Go version, such as "go1.21.0"
 	GoFiles     []string          // absolute paths to package source files
 	ImportMap   map[string]string // maps import path to package path
@@ -1949,10 +1948,8 @@ func (b *Builder) buildExportConfig(a *Action) *exportConfig {
 		v = cmp.Or(a.Package.Module.GoVersion, gover.DefaultGoModVersion)
 	}
 
-	srcs := make([]string, len(a.Package.GoFiles))
-	for i := range srcs {
-		srcs[i] = filepath.Join(a.Package.Dir, a.Package.GoFiles[i])
-	}
+	// Careful, a.Package.GoFiles can be relative or absolute paths (see #82042).
+	srcs := mkAbsFiles(a.Package.Dir, a.Package.GoFiles)
 	// Collect output source files from any cgo dependencies.
 	if a.Package.UsesCgo() {
 		for _, dep := range a.Deps {
@@ -1995,7 +1992,6 @@ func (b *Builder) exportActionID(a *Action, ecfg *exportConfig) cache.ActionID {
 	fmt.Fprintf(h, "export %s\n", b.toolID("export"))
 	// Flags.
 	fmt.Fprintf(h, "importPath %s\n", ecfg.ImportPath)
-	fmt.Fprintf(h, "compiler %s\n", ecfg.Compiler)
 	fmt.Fprintf(h, "goVersion %s\n", ecfg.GoVersion)
 	// Source file contents.
 	for _, file := range ecfg.GoFiles {
