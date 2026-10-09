@@ -459,9 +459,9 @@ wherever its prerequisites and track allow.
 | [ ] | A | `impl-defined` | Implementation-defined behavior policy | — | — |
 | [x] | B | `specfill` | API walker + report mode | — | — |
 | [x] | B | `fill-gen` | Wire `specfill` into the generators | `specfill` | — |
-| [ ] | B | `named-results` | Reconcile parameter and result names with spec | `fill-gen` | — |
-| [ ] | B | `gen-docs` | Inject spec docs into generated output | `fill-gen` | `named-results` |
-| [ ] | B | `fill-enforce` | Signature + name mismatch becomes an error | `named-results` | — |
+| [x] | B | `named-results` | Reconcile parameter and result names with spec | `fill-gen` | — |
+| [x] | B | `gen-docs` | Inject spec docs into generated output | `fill-gen` | `named-results` |
+| [x] | B | `fill-enforce` | Signature + name mismatch becomes an error | `named-results` | — |
 | [ ] | C | `ci-audit` | CI/hardware audit | — | — |
 | [ ] | C | `conform-fixed` | Conformance harness, fixed-width types | `ci-audit` | `specfill` |
 | [ ] | C | `conform-scalable` | Conformance harness, scalable types | `width`, `conform-fixed` | — |
@@ -871,7 +871,7 @@ wasmgen, midway.
 output is byte-identical to the previous tree.
 
 ### `named-results` — Reconcile parameter and result names with spec
-**Done:** [ ] · **Needs:** `fill-gen` · **Blocks:** `fill-enforce`
+**Done:** [x] · **Needs:** `fill-gen` · **Blocks:** `fill-enforce`
 
 Every declaration spec covers carries spec's parameter and result names. See
 §1.8. Declarations spec does not cover are out of scope; they gain names when
@@ -904,7 +904,7 @@ Fill unnamed arguments in hand-written files with `specfill -w -no-fill-doc`.
 and the generators run without `NoFillNames` or `AllowNameMismatches`.
 
 ### `gen-docs` — Inject spec docs into generated output
-**Done:** [ ] · **Needs:** `fill-gen` · **Prefers:** `named-results` · **Blocks:** `comments-yaml`, `handwritten-fill`, `template-docs` · **Risk:** `risk-silent-doc-loss`
+**Done:** [x] · **Needs:** `fill-gen` · **Prefers:** `named-results` · **Blocks:** `comments-yaml`, `handwritten-fill`, `template-docs` · **Risk:** `risk-silent-doc-loss`
 
 Turn on doc injection in the generators by dropping `NoFillDoc`. Generators keep
 setting `AllowDocRewrite` until `template-docs` removes their own prose.
@@ -932,14 +932,16 @@ with the regenerated output; the diff should touch only note lines. (2) Turn on
 doc injection in simdgen. (3) Turn it on in tmplgen, wasmgen, midway. Commits
 (2) and (3) include their regenerated output; verify that output changes only
 for operations spec covers, and review every changed doc comment to make sure
-nothing was unintentionally dropped.
+nothing was unintentionally dropped. (4) If `fill-enforce` is already done, drop
+`NoFillDoc: true` from `cmd/specfill.TestFill` for generated files to start
+enforcing documentation matches.
 
 **Done when** generated output has no check (a) violations, all four generators
 inject docs, nothing was dropped without review, and the only differences
 against the previous tree are doc comments for operations spec covers.
 
 ### `fill-enforce` — Signature + name mismatch becomes an error
-**Done:** [ ] · **Needs:** `named-results`
+**Done:** [x] · **Needs:** `named-results`
 
 For operations spec covers, disagreement fails. Missing spec functions remain
 tolerated. Note this does **not** depend on `sig-refactor`: `specfill` compares
