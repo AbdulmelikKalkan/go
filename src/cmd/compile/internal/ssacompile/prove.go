@@ -297,13 +297,7 @@ func (ft *factsTable) newLimit(v *ssa.Value, newLim ssa.Limit) {
 	// Merge old and new information.
 	lim := oldLim.Intersect(newLim)
 
-	// signed <-> unsigned propagation
-	if lim.Min >= 0 {
-		lim = lim.UnsignedMinMax(uint64(lim.Min), uint64(lim.Max))
-	}
-	if ssa.FitsInBitsU(lim.Umax, uint(8*v.Type.Size()-1)) {
-		lim = lim.SignedMinMax(int64(lim.Umin), int64(lim.Umax))
-	}
+	lim = lim.PropagateUnsignedSignedRelationship(uint(v.Type.Size()) * 8)
 
 	if lim == oldLim {
 		return // nothing new to record
@@ -1795,6 +1789,11 @@ func getBranch(sdom ssa.SparseTree, p *ssa.Block, b *ssa.Block) branch {
 			return negative
 		}
 	case block.BlockJumpTable:
+		// A direct successor with a single predecessor records its branch
+		// index in the incoming edge, so we need not scan all successors.
+		if len(b.Preds) == 1 && b.Preds[0].B == p {
+			return jumpTable0 + branch(b.Preds[0].I)
+		}
 		// TODO: this loop can lead to quadratic behavior, as
 		// getBranch can be called len(p.Succs) times.
 		for i, e := range p.Succs {
