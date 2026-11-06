@@ -1339,7 +1339,6 @@ func initIntrinsics(cfg *intrinsicBuildConfig) {
 		},
 		sys.AMD64, sys.ARM64, sys.PPC64, sys.S390X, sys.RISCV64, sys.Loong64, sys.MIPS64)
 	alias("math/bits", "Add", "math/bits", "Add64", p8...)
-	alias("internal/runtime/math", "Add64", "math/bits", "Add64", all...)
 	addF("math/bits", "Sub64",
 		func(s *state, n *ir.CallExpr, args []*ssa.Value) *ssa.Value {
 			return s.newValue3(ssaop.OpSub64borrow, types.NewTuple(types.Types[types.TUINT64], types.Types[types.TUINT64]), args[0], args[1], args[2])
@@ -1405,16 +1404,16 @@ func initIntrinsics(cfg *intrinsicBuildConfig) {
 	alias("sync/atomic", "AddUintptr", "internal/runtime/atomic", "Xadd", p4...)
 	alias("sync/atomic", "AddUintptr", "internal/runtime/atomic", "Xadd64", p8...)
 
-	alias("sync/atomic", "AndInt32", "internal/runtime/atomic", "And32", sys.ArchARM64, sys.ArchAMD64, sys.ArchLoong64, sys.ArchRISCV64)
-	alias("sync/atomic", "AndUint32", "internal/runtime/atomic", "And32", sys.ArchARM64, sys.ArchAMD64, sys.ArchLoong64, sys.ArchRISCV64)
-	alias("sync/atomic", "AndInt64", "internal/runtime/atomic", "And64", sys.ArchARM64, sys.ArchAMD64, sys.ArchLoong64, sys.ArchRISCV64)
-	alias("sync/atomic", "AndUint64", "internal/runtime/atomic", "And64", sys.ArchARM64, sys.ArchAMD64, sys.ArchLoong64, sys.ArchRISCV64)
-	alias("sync/atomic", "AndUintptr", "internal/runtime/atomic", "And64", sys.ArchARM64, sys.ArchAMD64, sys.ArchLoong64, sys.ArchRISCV64)
-	alias("sync/atomic", "OrInt32", "internal/runtime/atomic", "Or32", sys.ArchARM64, sys.ArchAMD64, sys.ArchLoong64, sys.ArchRISCV64)
-	alias("sync/atomic", "OrUint32", "internal/runtime/atomic", "Or32", sys.ArchARM64, sys.ArchAMD64, sys.ArchLoong64, sys.ArchRISCV64)
-	alias("sync/atomic", "OrInt64", "internal/runtime/atomic", "Or64", sys.ArchARM64, sys.ArchAMD64, sys.ArchLoong64, sys.ArchRISCV64)
-	alias("sync/atomic", "OrUint64", "internal/runtime/atomic", "Or64", sys.ArchARM64, sys.ArchAMD64, sys.ArchLoong64, sys.ArchRISCV64)
-	alias("sync/atomic", "OrUintptr", "internal/runtime/atomic", "Or64", sys.ArchARM64, sys.ArchAMD64, sys.ArchLoong64, sys.ArchRISCV64)
+	alias("sync/atomic", "AndInt32", "internal/runtime/atomic", "And32", all...)
+	alias("sync/atomic", "AndUint32", "internal/runtime/atomic", "And32", all...)
+	alias("sync/atomic", "AndInt64", "internal/runtime/atomic", "And64", all...)
+	alias("sync/atomic", "AndUint64", "internal/runtime/atomic", "And64", all...)
+	alias("sync/atomic", "AndUintptr", "internal/runtime/atomic", "And64", p8...)
+	alias("sync/atomic", "OrInt32", "internal/runtime/atomic", "Or32", all...)
+	alias("sync/atomic", "OrUint32", "internal/runtime/atomic", "Or32", all...)
+	alias("sync/atomic", "OrInt64", "internal/runtime/atomic", "Or64", all...)
+	alias("sync/atomic", "OrUint64", "internal/runtime/atomic", "Or64", all...)
+	alias("sync/atomic", "OrUintptr", "internal/runtime/atomic", "Or64", p8...)
 
 	/******** math/big ********/
 	alias("math/big", "mulWW", "math/bits", "Mul64", p8...)
