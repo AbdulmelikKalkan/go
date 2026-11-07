@@ -436,203 +436,299 @@ func (x Uint64x2) ConcatAddPairs(y Uint64x2) (z Uint64x2)
 
 /* ConcatEven */
 
-// ConcatEven concatenates even-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x0,x2,y0,y2].
+// ConcatEven concatenates the even-indexed elements of x and y.
+//
+//	z = {x[0], x[2], ..., x[n-2], y[0], y[2], ..., y[n-2]}, where n = 16
 //
 // Asm: VUZP1
-func (x Int8x16) ConcatEven(y Int8x16) Int8x16
+func (x Int8x16) ConcatEven(y Int8x16) (z Int8x16)
 
-// ConcatEven concatenates even-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x0,x2,y0,y2].
+// ConcatEven concatenates the even-indexed elements of x and y.
+//
+//	z = {x[0], x[2], ..., x[n-2], y[0], y[2], ..., y[n-2]}, where n = 8
 //
 // Asm: VUZP1
-func (x Int16x8) ConcatEven(y Int16x8) Int16x8
+func (x Int16x8) ConcatEven(y Int16x8) (z Int16x8)
 
-// ConcatEven concatenates even-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x0,x2,y0,y2].
+// ConcatEven concatenates the even-indexed elements of x and y.
+//
+//	z = {x[0], x[2], y[0], y[2]}
 //
 // Asm: VUZP1
-func (x Int32x4) ConcatEven(y Int32x4) Int32x4
+func (x Int32x4) ConcatEven(y Int32x4) (z Int32x4)
 
-// ConcatEven concatenates even-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x0,x2,y0,y2].
+// ConcatEven concatenates the even-indexed elements of x and y.
+//
+//	z = {x[0], y[0]}
 //
 // Asm: VUZP1
-func (x Int64x2) ConcatEven(y Int64x2) Int64x2
+func (x Int64x2) ConcatEven(y Int64x2) (z Int64x2)
 
-// ConcatEven concatenates even-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x0,x2,y0,y2].
+// ConcatEven concatenates the even-indexed elements of x and y.
+//
+//	z = {x[0], x[2], ..., x[n-2], y[0], y[2], ..., y[n-2]}, where n = 16
 //
 // Asm: VUZP1
-func (x Uint8x16) ConcatEven(y Uint8x16) Uint8x16
+func (x Uint8x16) ConcatEven(y Uint8x16) (z Uint8x16)
 
-// ConcatEven concatenates even-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x0,x2,y0,y2].
+// ConcatEven concatenates the even-indexed elements of x and y.
+//
+//	z = {x[0], x[2], ..., x[n-2], y[0], y[2], ..., y[n-2]}, where n = 8
 //
 // Asm: VUZP1
-func (x Uint16x8) ConcatEven(y Uint16x8) Uint16x8
+func (x Uint16x8) ConcatEven(y Uint16x8) (z Uint16x8)
 
-// ConcatEven concatenates even-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x0,x2,y0,y2].
+// ConcatEven concatenates the even-indexed elements of x and y.
+//
+//	z = {x[0], x[2], y[0], y[2]}
 //
 // Asm: VUZP1
-func (x Uint32x4) ConcatEven(y Uint32x4) Uint32x4
+func (x Uint32x4) ConcatEven(y Uint32x4) (z Uint32x4)
 
-// ConcatEven concatenates even-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x0,x2,y0,y2].
+// ConcatEven concatenates the even-indexed elements of x and y.
+//
+//	z = {x[0], y[0]}
 //
 // Asm: VUZP1
-func (x Uint64x2) ConcatEven(y Uint64x2) Uint64x2
+func (x Uint64x2) ConcatEven(y Uint64x2) (z Uint64x2)
 
 /* ConcatMaxPairs */
 
-// ConcatMaxPairs horizontally computes the maximum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3] and y = [y0, y1, y2, y3], the result is [max(x0,x1), max(x2,x3), max(y0,y1), max(y2,y3)].
+// ConcatMaxPairs horizontally takes the maximum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {max(x[0], x[1]), max(x[2], x[3]), max(y[0], y[1]), max(y[2], y[3])}
+//
+// For floats, max is Go's max built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VFMAXP
-func (x Float32x4) ConcatMaxPairs(y Float32x4) Float32x4
+func (x Float32x4) ConcatMaxPairs(y Float32x4) (z Float32x4)
 
-// ConcatMaxPairs horizontally computes the maximum of adjacent pairs of elements.
-// For x = [x0, x1] and y = [y0, y1], the result is [max(x0,x1), max(y0,y1)].
+// ConcatMaxPairs horizontally takes the maximum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {max(x[0], x[1]), max(y[0], y[1])}
+//
+// For floats, max is Go's max built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VFMAXP
-func (x Float64x2) ConcatMaxPairs(y Float64x2) Float64x2
+func (x Float64x2) ConcatMaxPairs(y Float64x2) (z Float64x2)
 
-// ConcatMaxPairs horizontally computes the maximum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3, ...] and y = [y0, y1, y2, y3, ...], the result is [max(x0,x1), max(x2,x3), ..., max(y0,y1), max(y2,y3), ...].
+// ConcatMaxPairs horizontally takes the maximum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {max(x[0], x[1]), max(x[2], x[3]), ..., max(y[0], y[1]), max(y[2], y[3]), ...}
+//
+// For floats, max is Go's max built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VSMAXP
-func (x Int8x16) ConcatMaxPairs(y Int8x16) Int8x16
+func (x Int8x16) ConcatMaxPairs(y Int8x16) (z Int8x16)
 
-// ConcatMaxPairs horizontally computes the maximum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3, ...] and y = [y0, y1, y2, y3, ...], the result is [max(x0,x1), max(x2,x3), ..., max(y0,y1), max(y2,y3), ...].
+// ConcatMaxPairs horizontally takes the maximum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {max(x[0], x[1]), max(x[2], x[3]), ..., max(y[0], y[1]), max(y[2], y[3]), ...}
+//
+// For floats, max is Go's max built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VSMAXP
-func (x Int16x8) ConcatMaxPairs(y Int16x8) Int16x8
+func (x Int16x8) ConcatMaxPairs(y Int16x8) (z Int16x8)
 
-// ConcatMaxPairs horizontally computes the maximum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3] and y = [y0, y1, y2, y3], the result is [max(x0,x1), max(x2,x3), max(y0,y1), max(y2,y3)].
+// ConcatMaxPairs horizontally takes the maximum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {max(x[0], x[1]), max(x[2], x[3]), max(y[0], y[1]), max(y[2], y[3])}
+//
+// For floats, max is Go's max built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VSMAXP
-func (x Int32x4) ConcatMaxPairs(y Int32x4) Int32x4
+func (x Int32x4) ConcatMaxPairs(y Int32x4) (z Int32x4)
 
-// ConcatMaxPairs horizontally computes the maximum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3, ...] and y = [y0, y1, y2, y3, ...], the result is [max(x0,x1), max(x2,x3), ..., max(y0,y1), max(y2,y3), ...].
+// ConcatMaxPairs horizontally takes the maximum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {max(x[0], x[1]), max(x[2], x[3]), ..., max(y[0], y[1]), max(y[2], y[3]), ...}
+//
+// For floats, max is Go's max built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VUMAXP
-func (x Uint8x16) ConcatMaxPairs(y Uint8x16) Uint8x16
+func (x Uint8x16) ConcatMaxPairs(y Uint8x16) (z Uint8x16)
 
-// ConcatMaxPairs horizontally computes the maximum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3, ...] and y = [y0, y1, y2, y3, ...], the result is [max(x0,x1), max(x2,x3), ..., max(y0,y1), max(y2,y3), ...].
+// ConcatMaxPairs horizontally takes the maximum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {max(x[0], x[1]), max(x[2], x[3]), ..., max(y[0], y[1]), max(y[2], y[3]), ...}
+//
+// For floats, max is Go's max built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VUMAXP
-func (x Uint16x8) ConcatMaxPairs(y Uint16x8) Uint16x8
+func (x Uint16x8) ConcatMaxPairs(y Uint16x8) (z Uint16x8)
 
-// ConcatMaxPairs horizontally computes the maximum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3] and y = [y0, y1, y2, y3], the result is [max(x0,x1), max(x2,x3), max(y0,y1), max(y2,y3)].
+// ConcatMaxPairs horizontally takes the maximum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {max(x[0], x[1]), max(x[2], x[3]), max(y[0], y[1]), max(y[2], y[3])}
+//
+// For floats, max is Go's max built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VUMAXP
-func (x Uint32x4) ConcatMaxPairs(y Uint32x4) Uint32x4
+func (x Uint32x4) ConcatMaxPairs(y Uint32x4) (z Uint32x4)
 
 /* ConcatMinPairs */
 
-// ConcatMinPairs horizontally computes the minimum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3] and y = [y0, y1, y2, y3], the result is [min(x0,x1), min(x2,x3), min(y0,y1), min(y2,y3)].
+// ConcatMinPairs horizontally takes the minimum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {min(x[0], x[1]), min(x[2], x[3]), min(y[0], y[1]), min(y[2], y[3])}
+//
+// For floats, min is Go's min built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VFMINP
-func (x Float32x4) ConcatMinPairs(y Float32x4) Float32x4
+func (x Float32x4) ConcatMinPairs(y Float32x4) (z Float32x4)
 
-// ConcatMinPairs horizontally computes the minimum of adjacent pairs of elements.
-// For x = [x0, x1] and y = [y0, y1], the result is [min(x0,x1), min(y0,y1)].
+// ConcatMinPairs horizontally takes the minimum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {min(x[0], x[1]), min(y[0], y[1])}
+//
+// For floats, min is Go's min built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VFMINP
-func (x Float64x2) ConcatMinPairs(y Float64x2) Float64x2
+func (x Float64x2) ConcatMinPairs(y Float64x2) (z Float64x2)
 
-// ConcatMinPairs horizontally computes the minimum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3, ...] and y = [y0, y1, y2, y3, ...], the result is [min(x0,x1), min(x2,x3), ..., min(y0,y1), min(y2,y3), ...].
+// ConcatMinPairs horizontally takes the minimum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {min(x[0], x[1]), min(x[2], x[3]), ..., min(y[0], y[1]), min(y[2], y[3]), ...}
+//
+// For floats, min is Go's min built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VSMINP
-func (x Int8x16) ConcatMinPairs(y Int8x16) Int8x16
+func (x Int8x16) ConcatMinPairs(y Int8x16) (z Int8x16)
 
-// ConcatMinPairs horizontally computes the minimum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3, ...] and y = [y0, y1, y2, y3, ...], the result is [min(x0,x1), min(x2,x3), ..., min(y0,y1), min(y2,y3), ...].
+// ConcatMinPairs horizontally takes the minimum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {min(x[0], x[1]), min(x[2], x[3]), ..., min(y[0], y[1]), min(y[2], y[3]), ...}
+//
+// For floats, min is Go's min built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VSMINP
-func (x Int16x8) ConcatMinPairs(y Int16x8) Int16x8
+func (x Int16x8) ConcatMinPairs(y Int16x8) (z Int16x8)
 
-// ConcatMinPairs horizontally computes the minimum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3] and y = [y0, y1, y2, y3], the result is [min(x0,x1), min(x2,x3), min(y0,y1), min(y2,y3)].
+// ConcatMinPairs horizontally takes the minimum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {min(x[0], x[1]), min(x[2], x[3]), min(y[0], y[1]), min(y[2], y[3])}
+//
+// For floats, min is Go's min built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VSMINP
-func (x Int32x4) ConcatMinPairs(y Int32x4) Int32x4
+func (x Int32x4) ConcatMinPairs(y Int32x4) (z Int32x4)
 
-// ConcatMinPairs horizontally computes the minimum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3, ...] and y = [y0, y1, y2, y3, ...], the result is [min(x0,x1), min(x2,x3), ..., min(y0,y1), min(y2,y3), ...].
+// ConcatMinPairs horizontally takes the minimum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {min(x[0], x[1]), min(x[2], x[3]), ..., min(y[0], y[1]), min(y[2], y[3]), ...}
+//
+// For floats, min is Go's min built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VUMINP
-func (x Uint8x16) ConcatMinPairs(y Uint8x16) Uint8x16
+func (x Uint8x16) ConcatMinPairs(y Uint8x16) (z Uint8x16)
 
-// ConcatMinPairs horizontally computes the minimum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3, ...] and y = [y0, y1, y2, y3, ...], the result is [min(x0,x1), min(x2,x3), ..., min(y0,y1), min(y2,y3), ...].
+// ConcatMinPairs horizontally takes the minimum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {min(x[0], x[1]), min(x[2], x[3]), ..., min(y[0], y[1]), min(y[2], y[3]), ...}
+//
+// For floats, min is Go's min built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VUMINP
-func (x Uint16x8) ConcatMinPairs(y Uint16x8) Uint16x8
+func (x Uint16x8) ConcatMinPairs(y Uint16x8) (z Uint16x8)
 
-// ConcatMinPairs horizontally computes the minimum of adjacent pairs of elements.
-// For x = [x0, x1, x2, x3] and y = [y0, y1, y2, y3], the result is [min(x0,x1), min(x2,x3), min(y0,y1), min(y2,y3)].
+// ConcatMinPairs horizontally takes the minimum of adjacent pairs of elements
+// in x and y and returns the concatenated result.
+//
+//	z = {min(x[0], x[1]), min(x[2], x[3]), min(y[0], y[1]), min(y[2], y[3])}
+//
+// For floats, min is Go's min built-in: it returns NaN if either element is
+// NaN, and orders -0 before +0.
 //
 // Asm: VUMINP
-func (x Uint32x4) ConcatMinPairs(y Uint32x4) Uint32x4
+func (x Uint32x4) ConcatMinPairs(y Uint32x4) (z Uint32x4)
 
 /* ConcatOdd */
 
-// ConcatOdd concatenates odd-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x1,x3,y1,y3].
+// ConcatOdd concatenates the odd-indexed elements of x and y.
+//
+//	z = {x[1], x[3], ..., x[n-1], y[1], y[3], ..., y[n-1]}, where n = 16
 //
 // Asm: VUZP2
-func (x Int8x16) ConcatOdd(y Int8x16) Int8x16
+func (x Int8x16) ConcatOdd(y Int8x16) (z Int8x16)
 
-// ConcatOdd concatenates odd-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x1,x3,y1,y3].
+// ConcatOdd concatenates the odd-indexed elements of x and y.
+//
+//	z = {x[1], x[3], ..., x[n-1], y[1], y[3], ..., y[n-1]}, where n = 8
 //
 // Asm: VUZP2
-func (x Int16x8) ConcatOdd(y Int16x8) Int16x8
+func (x Int16x8) ConcatOdd(y Int16x8) (z Int16x8)
 
-// ConcatOdd concatenates odd-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x1,x3,y1,y3].
+// ConcatOdd concatenates the odd-indexed elements of x and y.
+//
+//	z = {x[1], x[3], y[1], y[3]}
 //
 // Asm: VUZP2
-func (x Int32x4) ConcatOdd(y Int32x4) Int32x4
+func (x Int32x4) ConcatOdd(y Int32x4) (z Int32x4)
 
-// ConcatOdd concatenates odd-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x1,x3,y1,y3].
+// ConcatOdd concatenates the odd-indexed elements of x and y.
+//
+//	z = {x[1], y[1]}
 //
 // Asm: VUZP2
-func (x Int64x2) ConcatOdd(y Int64x2) Int64x2
+func (x Int64x2) ConcatOdd(y Int64x2) (z Int64x2)
 
-// ConcatOdd concatenates odd-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x1,x3,y1,y3].
+// ConcatOdd concatenates the odd-indexed elements of x and y.
+//
+//	z = {x[1], x[3], ..., x[n-1], y[1], y[3], ..., y[n-1]}, where n = 16
 //
 // Asm: VUZP2
-func (x Uint8x16) ConcatOdd(y Uint8x16) Uint8x16
+func (x Uint8x16) ConcatOdd(y Uint8x16) (z Uint8x16)
 
-// ConcatOdd concatenates odd-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x1,x3,y1,y3].
+// ConcatOdd concatenates the odd-indexed elements of x and y.
+//
+//	z = {x[1], x[3], ..., x[n-1], y[1], y[3], ..., y[n-1]}, where n = 8
 //
 // Asm: VUZP2
-func (x Uint16x8) ConcatOdd(y Uint16x8) Uint16x8
+func (x Uint16x8) ConcatOdd(y Uint16x8) (z Uint16x8)
 
-// ConcatOdd concatenates odd-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x1,x3,y1,y3].
+// ConcatOdd concatenates the odd-indexed elements of x and y.
+//
+//	z = {x[1], x[3], y[1], y[3]}
 //
 // Asm: VUZP2
-func (x Uint32x4) ConcatOdd(y Uint32x4) Uint32x4
+func (x Uint32x4) ConcatOdd(y Uint32x4) (z Uint32x4)
 
-// ConcatOdd concatenates odd-indexed elements from the concatenation of x and y.
-// For x = [x0,x1,x2,x3] and y = [y0,y1,y2,y3], result = [x1,x3,y1,y3].
+// ConcatOdd concatenates the odd-indexed elements of x and y.
+//
+//	z = {x[1], y[1]}
 //
 // Asm: VUZP2
-func (x Uint64x2) ConcatOdd(y Uint64x2) Uint64x2
+func (x Uint64x2) ConcatOdd(y Uint64x2) (z Uint64x2)
 
 /* ConcatShiftBytesRight */
 
@@ -1179,85 +1275,117 @@ func (x Uint64x2) InterleaveEven(y Uint64x2) Uint64x2
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
 //
+//	z = {x[n/2], y[n/2], x[n/2+1], y[n/2+1], ..., x[n-1], y[n-1]}, where n = 16
+//
 // Asm: VZIP2
-func (x Int8x16) InterleaveHi(y Int8x16) Int8x16
+func (x Int8x16) InterleaveHi(y Int8x16) (z Int8x16)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
 //
+//	z = {x[n/2], y[n/2], x[n/2+1], y[n/2+1], ..., x[n-1], y[n-1]}, where n = 8
+//
 // Asm: VZIP2
-func (x Int16x8) InterleaveHi(y Int16x8) Int16x8
+func (x Int16x8) InterleaveHi(y Int16x8) (z Int16x8)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
 //
+//	z = {x[2], y[2], x[3], y[3]}
+//
 // Asm: VZIP2
-func (x Int32x4) InterleaveHi(y Int32x4) Int32x4
+func (x Int32x4) InterleaveHi(y Int32x4) (z Int32x4)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
 //
+//	z = {x[1], y[1]}
+//
 // Asm: VZIP2
-func (x Int64x2) InterleaveHi(y Int64x2) Int64x2
+func (x Int64x2) InterleaveHi(y Int64x2) (z Int64x2)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
 //
+//	z = {x[n/2], y[n/2], x[n/2+1], y[n/2+1], ..., x[n-1], y[n-1]}, where n = 16
+//
 // Asm: VZIP2
-func (x Uint8x16) InterleaveHi(y Uint8x16) Uint8x16
+func (x Uint8x16) InterleaveHi(y Uint8x16) (z Uint8x16)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
 //
+//	z = {x[n/2], y[n/2], x[n/2+1], y[n/2+1], ..., x[n-1], y[n-1]}, where n = 8
+//
 // Asm: VZIP2
-func (x Uint16x8) InterleaveHi(y Uint16x8) Uint16x8
+func (x Uint16x8) InterleaveHi(y Uint16x8) (z Uint16x8)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
 //
+//	z = {x[2], y[2], x[3], y[3]}
+//
 // Asm: VZIP2
-func (x Uint32x4) InterleaveHi(y Uint32x4) Uint32x4
+func (x Uint32x4) InterleaveHi(y Uint32x4) (z Uint32x4)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
 //
+//	z = {x[1], y[1]}
+//
 // Asm: VZIP2
-func (x Uint64x2) InterleaveHi(y Uint64x2) Uint64x2
+func (x Uint64x2) InterleaveHi(y Uint64x2) (z Uint64x2)
 
 /* InterleaveLo */
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
 //
+//	z = {x[0], y[0], x[1], y[1], ..., x[n/2-1], y[n/2-1]}, where n = 16
+//
 // Asm: VZIP1
-func (x Int8x16) InterleaveLo(y Int8x16) Int8x16
+func (x Int8x16) InterleaveLo(y Int8x16) (z Int8x16)
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
 //
+//	z = {x[0], y[0], x[1], y[1], ..., x[n/2-1], y[n/2-1]}, where n = 8
+//
 // Asm: VZIP1
-func (x Int16x8) InterleaveLo(y Int16x8) Int16x8
+func (x Int16x8) InterleaveLo(y Int16x8) (z Int16x8)
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
 //
+//	z = {x[0], y[0], x[1], y[1]}
+//
 // Asm: VZIP1
-func (x Int32x4) InterleaveLo(y Int32x4) Int32x4
+func (x Int32x4) InterleaveLo(y Int32x4) (z Int32x4)
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
 //
+//	z = {x[0], y[0]}
+//
 // Asm: VZIP1
-func (x Int64x2) InterleaveLo(y Int64x2) Int64x2
+func (x Int64x2) InterleaveLo(y Int64x2) (z Int64x2)
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
 //
+//	z = {x[0], y[0], x[1], y[1], ..., x[n/2-1], y[n/2-1]}, where n = 16
+//
 // Asm: VZIP1
-func (x Uint8x16) InterleaveLo(y Uint8x16) Uint8x16
+func (x Uint8x16) InterleaveLo(y Uint8x16) (z Uint8x16)
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
 //
+//	z = {x[0], y[0], x[1], y[1], ..., x[n/2-1], y[n/2-1]}, where n = 8
+//
 // Asm: VZIP1
-func (x Uint16x8) InterleaveLo(y Uint16x8) Uint16x8
+func (x Uint16x8) InterleaveLo(y Uint16x8) (z Uint16x8)
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
 //
+//	z = {x[0], y[0], x[1], y[1]}
+//
 // Asm: VZIP1
-func (x Uint32x4) InterleaveLo(y Uint32x4) Uint32x4
+func (x Uint32x4) InterleaveLo(y Uint32x4) (z Uint32x4)
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
 //
+//	z = {x[0], y[0]}
+//
 // Asm: VZIP1
-func (x Uint64x2) InterleaveLo(y Uint64x2) Uint64x2
+func (x Uint64x2) InterleaveLo(y Uint64x2) (z Uint64x2)
 
 /* InterleaveOdd */
 
@@ -1979,45 +2107,61 @@ func (x Uint64x2) Or(y Uint64x2) (z Uint64x2)
 
 /* OrNot */
 
-// OrNot performs a bitwise x | ^y.
+// OrNot returns the bitwise OR NOT of x and y.
+//
+//	z[i] = x[i] | ^y[i]
 //
 // Asm: VORN
-func (x Int8x16) OrNot(y Int8x16) Int8x16
+func (x Int8x16) OrNot(y Int8x16) (z Int8x16)
 
-// OrNot performs a bitwise x | ^y.
+// OrNot returns the bitwise OR NOT of x and y.
+//
+//	z[i] = x[i] | ^y[i]
 //
 // Asm: VORN
-func (x Int16x8) OrNot(y Int16x8) Int16x8
+func (x Int16x8) OrNot(y Int16x8) (z Int16x8)
 
-// OrNot performs a bitwise x | ^y.
+// OrNot returns the bitwise OR NOT of x and y.
+//
+//	z[i] = x[i] | ^y[i]
 //
 // Asm: VORN
-func (x Int32x4) OrNot(y Int32x4) Int32x4
+func (x Int32x4) OrNot(y Int32x4) (z Int32x4)
 
-// OrNot performs a bitwise x | ^y.
+// OrNot returns the bitwise OR NOT of x and y.
+//
+//	z[i] = x[i] | ^y[i]
 //
 // Asm: VORN
-func (x Int64x2) OrNot(y Int64x2) Int64x2
+func (x Int64x2) OrNot(y Int64x2) (z Int64x2)
 
-// OrNot performs a bitwise x | ^y.
+// OrNot returns the bitwise OR NOT of x and y.
+//
+//	z[i] = x[i] | ^y[i]
 //
 // Asm: VORN
-func (x Uint8x16) OrNot(y Uint8x16) Uint8x16
+func (x Uint8x16) OrNot(y Uint8x16) (z Uint8x16)
 
-// OrNot performs a bitwise x | ^y.
+// OrNot returns the bitwise OR NOT of x and y.
+//
+//	z[i] = x[i] | ^y[i]
 //
 // Asm: VORN
-func (x Uint16x8) OrNot(y Uint16x8) Uint16x8
+func (x Uint16x8) OrNot(y Uint16x8) (z Uint16x8)
 
-// OrNot performs a bitwise x | ^y.
+// OrNot returns the bitwise OR NOT of x and y.
+//
+//	z[i] = x[i] | ^y[i]
 //
 // Asm: VORN
-func (x Uint32x4) OrNot(y Uint32x4) Uint32x4
+func (x Uint32x4) OrNot(y Uint32x4) (z Uint32x4)
 
-// OrNot performs a bitwise x | ^y.
+// OrNot returns the bitwise OR NOT of x and y.
+//
+//	z[i] = x[i] | ^y[i]
 //
 // Asm: VORN
-func (x Uint64x2) OrNot(y Uint64x2) Uint64x2
+func (x Uint64x2) OrNot(y Uint64x2) (z Uint64x2)
 
 /* Round */
 

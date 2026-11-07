@@ -90,6 +90,9 @@ type fact struct {
 	target string
 }
 
+func (k methodKey) String() string { return k.recv + "." + k.name }
+func (k declKey) String() string   { return k.file + ": " + k.methodKey.String() }
+
 func (d *decl) methodKey() methodKey        { return methodKey{d.recv, d.name} }
 func (f fact) declKey() declKey             { return declKey{f.file, f.methodKey()} }
 func (f fact) archMethodKey() archMethodKey { return archMethodKey{f.target, f.pkg, f.methodKey()} }
@@ -104,6 +107,40 @@ func (f fact) tool() string { t, _, _ := strings.Cut(f.gen, "/"); return t }
 // so from every denominator. See SPEC-TRANSITION.md §2.7.
 func nonSpecOp(name string) bool {
 	return name == "ToArch" || strings.HasSuffix(name, "FromArch")
+}
+
+// nonSpecDecl reports whether d is a declaration that will never come from
+// spec, so that it is excluded from the fact table and every denominator:
+// a [nonSpecOp], or a declaration that is not a vector operation at all.
+// These are:
+//
+//   - CPU feature checks, the methods of archsimd.X86Features and
+//     archsimd.ARM64Features (such as X86.AVX512 and ARM64.SVE);
+//   - package simd's queries about the implementation, Emulated, VectorBitSize
+//     and HasHardwareCarrylessMultiply, which the generator README lists as
+//     the one addition to the intersection of the archsimd APIs;
+//   - archsimd.ClearAVXUpperBits, a hint to the hardware with no operands;
+//   - the amd64 Merge methods, which are deprecated in favor of IfElse, which
+//     spec covers.
+func nonSpecDecl(d *decl) bool {
+	switch {
+	case nonSpecOp(d.name):
+		return true
+	case d.recv == "X86Features" || d.recv == "ARM64Features":
+		return true
+	case d.recv == "" && nonSpecFuncs[d.name]:
+		return true
+	case d.recv != "" && d.name == "Merge":
+		return true
+	}
+	return false
+}
+
+var nonSpecFuncs = map[string]bool{
+	"Emulated":                     true,
+	"VectorBitSize":                true,
+	"HasHardwareCarrylessMultiply": true,
+	"ClearAVXUpperBits":            true,
 }
 
 // loadOverlay builds a packages.Config.Overlay map from the scratch overlay
@@ -408,13 +445,13 @@ func countMidwayComments(genDir string) (n int) {
 }
 
 // commonMethods returns the method names defined in simd_emulated.go,
-// less [nonSpecOp]. That set is spec-common's scope, and the portable
+// less [nonSpecDecl]. That set is spec-common's scope, and the portable
 // core a new architecture implements first.
 func commonMethods(api []*decl) []string {
 	seen := map[string]bool{}
 	var names []string
 	for _, d := range api {
-		if d.file == "simd_emulated.go" && d.recv != "" && !nonSpecOp(d.name) {
+		if d.file == "simd_emulated.go" && d.recv != "" && !nonSpecDecl(d) {
 			if !seen[d.name] {
 				seen[d.name] = true
 				names = append(names, d.name)

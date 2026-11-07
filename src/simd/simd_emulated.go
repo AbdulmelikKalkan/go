@@ -179,6 +179,14 @@ func (x Int8s) GreaterEqual(y Int8s) (z Mask8s) {
 	return res
 }
 
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Int8s) HiToLo() (z Int8s) {
+	return Int8s{a: x.b}
+}
+
 // Less returns a mask indicating which elements of x are less than y.
 //
 //	z[i] = x[i] < y[i]
@@ -550,6 +558,14 @@ func (x Int16s) GreaterEqual(y Int16s) (z Mask16s) {
 		}
 	}
 	return res
+}
+
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Int16s) HiToLo() (z Int16s) {
+	return Int16s{a: x.b}
 }
 
 // Less returns a mask indicating which elements of x are less than y.
@@ -940,6 +956,14 @@ func (x Int32s) GreaterEqual(y Int32s) (z Mask32s) {
 	return res
 }
 
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Int32s) HiToLo() (z Int32s) {
+	return Int32s{a: x.b}
+}
+
 // Less returns a mask indicating which elements of x are less than y.
 //
 //	z[i] = x[i] < y[i]
@@ -1272,6 +1296,14 @@ func (x Int64s) GreaterEqual(y Int64s) (z Mask64s) {
 	return res
 }
 
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Int64s) HiToLo() (z Int64s) {
+	return Int64s{a: x.b}
+}
+
 // Less returns a mask indicating which elements of x are less than y.
 //
 //	z[i] = x[i] < y[i]
@@ -1540,6 +1572,14 @@ func (x Uint8s) Equal(y Uint8s) (z Mask8s) {
 		}
 	}
 	return res
+}
+
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Uint8s) HiToLo() (z Uint8s) {
+	return Uint8s{a: x.b}
 }
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
@@ -1895,6 +1935,14 @@ func (x Uint16s) GreaterEqual(y Uint16s) (z Mask16s) {
 		}
 	}
 	return res
+}
+
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Uint16s) HiToLo() (z Uint16s) {
+	return Uint16s{a: x.b}
 }
 
 // Less returns a mask indicating which elements of x are less than y.
@@ -2304,6 +2352,14 @@ func (x Uint32s) GreaterEqual(y Uint32s) (z Mask32s) {
 	return res
 }
 
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Uint32s) HiToLo() (z Uint32s) {
+	return Uint32s{a: x.b}
+}
+
 // Less returns a mask indicating which elements of x are less than y.
 //
 //	z[i] = x[i] < y[i]
@@ -2682,6 +2738,14 @@ func (x Uint64s) GreaterEqual(y Uint64s) (z Mask64s) {
 	return res
 }
 
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Uint64s) HiToLo() (z Uint64s) {
+	return Uint64s{a: x.b}
+}
+
 // Less returns a mask indicating which elements of x are less than y.
 //
 //	z[i] = x[i] < y[i]
@@ -2963,6 +3027,22 @@ func (x Float32s) Add(y Float32s) (z Float32s) {
 	return res
 }
 
+// Ceil returns the least integer value greater than or equal to each element
+// of x.
+//
+//	z[i] = ceil(x[i])
+//
+// Special cases follow IEEE 754: Ceil(±0) = ±0, Ceil(±Inf) = ±Inf, Ceil(x) = -0
+// for -1 < x < -0, and Ceil(NaN) = NaN. The sign and payload of a NaN result
+// are unspecified.
+func (x Float32s) Ceil() (z Float32s) {
+	var res Float32s
+	for i := 0; i < 4; i++ {
+		res.set(i, float32(math.Ceil(float64(x.get(i)))))
+	}
+	return res
+}
+
 // ConvertToInt32 converts each element of x to int32.
 //
 // When a conversion is inexact, this truncates the result (rounds toward zero).
@@ -3002,6 +3082,21 @@ func (x Float32s) Equal(y Float32s) (z Mask32s) {
 	return res
 }
 
+// Floor returns the greatest integer value less than or equal to each element
+// of x.
+//
+//	z[i] = floor(x[i])
+//
+// Special cases follow IEEE 754: Floor(±0) = ±0, Floor(±Inf) = ±Inf, and
+// Floor(NaN) = NaN. The sign and payload of a NaN result are unspecified.
+func (x Float32s) Floor() (z Float32s) {
+	var res Float32s
+	for i := 0; i < 4; i++ {
+		res.set(i, float32(math.Floor(float64(x.get(i)))))
+	}
+	return res
+}
+
 // Greater returns a mask indicating which elements of x are greater than y.
 //
 //	z[i] = x[i] > y[i]
@@ -3027,6 +3122,14 @@ func (x Float32s) GreaterEqual(y Float32s) (z Mask32s) {
 		}
 	}
 	return res
+}
+
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Float32s) HiToLo() (z Float32s) {
+	return Float32s{a: x.b}
 }
 
 // Len returns the number of elements in x.
@@ -3201,6 +3304,22 @@ func (x Float32s) ReduceSum() (z float32) {
 	return (x.get(0) + x.get(1)) + (x.get(2) + x.get(3))
 }
 
+// Round returns the nearest integer value to each element of x, rounding ties
+// to even.
+//
+//	z[i] = roundToEven(x[i])
+//
+// Special cases follow IEEE 754: Round(±0) = ±0, Round(±Inf) = ±Inf,
+// Round(x) = -0 for -0.5 <= x < -0, and Round(NaN) = NaN. The sign and payload
+// of a NaN result are unspecified.
+func (x Float32s) Round() (z Float32s) {
+	var res Float32s
+	for i := 0; i < 4; i++ {
+		res.set(i, float32(math.RoundToEven(float64(x.get(i)))))
+	}
+	return res
+}
+
 // Sqrt returns the elementwise square root of x.
 //
 //	z[i] = sqrt(x[i])
@@ -3252,6 +3371,21 @@ func (x Float32s) Sub(y Float32s) (z Float32s) {
 // ToBits returns the IEEE 754 binary representation of each element of x.
 func (x Float32s) ToBits() (z Uint32s) {
 	return Uint32s{a: x.a, b: x.b}
+}
+
+// Trunc returns the integer value of each element of x, rounded toward zero.
+//
+//	z[i] = trunc(x[i])
+//
+// Special cases follow IEEE 754: Trunc(±0) = ±0, Trunc(±Inf) = ±Inf,
+// Trunc(x) = -0 for -1 < x < -0, and Trunc(NaN) = NaN. The sign and payload of
+// a NaN result are unspecified.
+func (x Float32s) Trunc() (z Float32s) {
+	var res Float32s
+	for i := 0; i < 4; i++ {
+		res.set(i, float32(math.Trunc(float64(x.get(i)))))
+	}
+	return res
 }
 
 // LoadFloat64s loads a slice into a vector. If len(s) < z.Len(), it panics.
@@ -3313,6 +3447,21 @@ func (x Float64s) Add(y Float64s) (z Float64s) {
 	return res
 }
 
+// Ceil returns the least integer value greater than or equal to each element
+// of x.
+//
+//	z[i] = ceil(x[i])
+//
+// Special cases follow IEEE 754: Ceil(±0) = ±0, Ceil(±Inf) = ±Inf, Ceil(x) = -0
+// for -1 < x < -0, and Ceil(NaN) = NaN. The sign and payload of a NaN result
+// are unspecified.
+func (x Float64s) Ceil() (z Float64s) {
+	var res Float64s
+	res.set(0, math.Ceil(x.get(0)))
+	res.set(1, math.Ceil(x.get(1)))
+	return res
+}
+
 // Div divides x by y elementwise.
 //
 //	z[i] = x[i] / y[i]
@@ -3336,6 +3485,20 @@ func (x Float64s) Equal(y Float64s) (z Mask64s) {
 	if x.get(1) == y.get(1) {
 		res.b = ^uint64(0)
 	}
+	return res
+}
+
+// Floor returns the greatest integer value less than or equal to each element
+// of x.
+//
+//	z[i] = floor(x[i])
+//
+// Special cases follow IEEE 754: Floor(±0) = ±0, Floor(±Inf) = ±Inf, and
+// Floor(NaN) = NaN. The sign and payload of a NaN result are unspecified.
+func (x Float64s) Floor() (z Float64s) {
+	var res Float64s
+	res.set(0, math.Floor(x.get(0)))
+	res.set(1, math.Floor(x.get(1)))
 	return res
 }
 
@@ -3366,6 +3529,14 @@ func (x Float64s) GreaterEqual(y Float64s) (z Mask64s) {
 		res.b = ^uint64(0)
 	}
 	return res
+}
+
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Float64s) HiToLo() (z Float64s) {
+	return Float64s{a: x.b}
 }
 
 // Len returns the number of elements in x.
@@ -3538,6 +3709,21 @@ func (x Float64s) ReduceSum() (z float64) {
 	return x.get(0) + x.get(1)
 }
 
+// Round returns the nearest integer value to each element of x, rounding ties
+// to even.
+//
+//	z[i] = roundToEven(x[i])
+//
+// Special cases follow IEEE 754: Round(±0) = ±0, Round(±Inf) = ±Inf,
+// Round(x) = -0 for -0.5 <= x < -0, and Round(NaN) = NaN. The sign and payload
+// of a NaN result are unspecified.
+func (x Float64s) Round() (z Float64s) {
+	var res Float64s
+	res.set(0, math.RoundToEven(x.get(0)))
+	res.set(1, math.RoundToEven(x.get(1)))
+	return res
+}
+
 // Sqrt returns the elementwise square root of x.
 //
 //	z[i] = sqrt(x[i])
@@ -3586,6 +3772,20 @@ func (x Float64s) Sub(y Float64s) (z Float64s) {
 // ToBits returns the IEEE 754 binary representation of each element of x.
 func (x Float64s) ToBits() (z Uint64s) {
 	return Uint64s{a: x.a, b: x.b}
+}
+
+// Trunc returns the integer value of each element of x, rounded toward zero.
+//
+//	z[i] = trunc(x[i])
+//
+// Special cases follow IEEE 754: Trunc(±0) = ±0, Trunc(±Inf) = ±Inf,
+// Trunc(x) = -0 for -1 < x < -0, and Trunc(NaN) = NaN. The sign and payload of
+// a NaN result are unspecified.
+func (x Float64s) Trunc() (z Float64s) {
+	var res Float64s
+	res.set(0, math.Trunc(x.get(0)))
+	res.set(1, math.Trunc(x.get(1)))
+	return res
 }
 
 func (x *Mask8s) set(i int, v bool) {

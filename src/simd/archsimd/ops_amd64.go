@@ -933,6 +933,18 @@ func (x Float32x8) Ceil() (z Float32x8)
 // for -1 < x < -0, and Ceil(NaN) = NaN. The sign and payload of a NaN result
 // are unspecified.
 //
+// Asm: VRNDSCALEPS, CPU Feature: AVX512
+func (x Float32x16) Ceil() (z Float32x16)
+
+// Ceil returns the least integer value greater than or equal to each element
+// of x.
+//
+//	z[i] = ceil(x[i])
+//
+// Special cases follow IEEE 754: Ceil(±0) = ±0, Ceil(±Inf) = ±Inf, Ceil(x) = -0
+// for -1 < x < -0, and Ceil(NaN) = NaN. The sign and payload of a NaN result
+// are unspecified.
+//
 // Asm: VROUNDPD, CPU Feature: AVX
 func (x Float64x2) Ceil() (z Float64x2)
 
@@ -947,6 +959,18 @@ func (x Float64x2) Ceil() (z Float64x2)
 //
 // Asm: VROUNDPD, CPU Feature: AVX
 func (x Float64x4) Ceil() (z Float64x4)
+
+// Ceil returns the least integer value greater than or equal to each element
+// of x.
+//
+//	z[i] = ceil(x[i])
+//
+// Special cases follow IEEE 754: Ceil(±0) = ±0, Ceil(±Inf) = ±Inf, Ceil(x) = -0
+// for -1 < x < -0, and Ceil(NaN) = NaN. The sign and payload of a NaN result
+// are unspecified.
+//
+// Asm: VRNDSCALEPD, CPU Feature: AVX512
+func (x Float64x8) Ceil() (z Float64x8)
 
 /* CeilScaled */
 
@@ -3054,6 +3078,17 @@ func (x Float32x8) Floor() (z Float32x8)
 // Special cases follow IEEE 754: Floor(±0) = ±0, Floor(±Inf) = ±Inf, and
 // Floor(NaN) = NaN. The sign and payload of a NaN result are unspecified.
 //
+// Asm: VRNDSCALEPS, CPU Feature: AVX512
+func (x Float32x16) Floor() (z Float32x16)
+
+// Floor returns the greatest integer value less than or equal to each element
+// of x.
+//
+//	z[i] = floor(x[i])
+//
+// Special cases follow IEEE 754: Floor(±0) = ±0, Floor(±Inf) = ±Inf, and
+// Floor(NaN) = NaN. The sign and payload of a NaN result are unspecified.
+//
 // Asm: VROUNDPD, CPU Feature: AVX
 func (x Float64x2) Floor() (z Float64x2)
 
@@ -3067,6 +3102,17 @@ func (x Float64x2) Floor() (z Float64x2)
 //
 // Asm: VROUNDPD, CPU Feature: AVX
 func (x Float64x4) Floor() (z Float64x4)
+
+// Floor returns the greatest integer value less than or equal to each element
+// of x.
+//
+//	z[i] = floor(x[i])
+//
+// Special cases follow IEEE 754: Floor(±0) = ±0, Floor(±Inf) = ±Inf, and
+// Floor(NaN) = NaN. The sign and payload of a NaN result are unspecified.
+//
+// Asm: VRNDSCALEPD, CPU Feature: AVX512
+func (x Float64x8) Floor() (z Float64x8)
 
 /* FloorScaled */
 
@@ -3837,43 +3883,59 @@ func (x Uint64x8) GreaterEqual(y Uint64x8) (z Mask64x8)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
 //
-// Asm: VPUNPCKHBW, CPU Feature: AVX
-func (x Int8x16) InterleaveHi(y Int8x16) Int8x16
-
-// InterleaveHi interleaves the elements of the high halves of x and y.
-//
-// Asm: VPUNPCKHWD, CPU Feature: AVX
-func (x Int16x8) InterleaveHi(y Int16x8) Int16x8
-
-// InterleaveHi interleaves the elements of the high halves of x and y.
-//
-// Asm: VPUNPCKHDQ, CPU Feature: AVX
-func (x Int32x4) InterleaveHi(y Int32x4) Int32x4
-
-// InterleaveHi interleaves the elements of the high halves of x and y.
-//
-// Asm: VPUNPCKHQDQ, CPU Feature: AVX
-func (x Int64x2) InterleaveHi(y Int64x2) Int64x2
-
-// InterleaveHi interleaves the elements of the high halves of x and y.
+//	z = {x[n/2], y[n/2], x[n/2+1], y[n/2+1], ..., x[n-1], y[n-1]}, where n = 16
 //
 // Asm: VPUNPCKHBW, CPU Feature: AVX
-func (x Uint8x16) InterleaveHi(y Uint8x16) Uint8x16
+func (x Int8x16) InterleaveHi(y Int8x16) (z Int8x16)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
+//
+//	z = {x[n/2], y[n/2], x[n/2+1], y[n/2+1], ..., x[n-1], y[n-1]}, where n = 8
 //
 // Asm: VPUNPCKHWD, CPU Feature: AVX
-func (x Uint16x8) InterleaveHi(y Uint16x8) Uint16x8
+func (x Int16x8) InterleaveHi(y Int16x8) (z Int16x8)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
+//
+//	z = {x[2], y[2], x[3], y[3]}
 //
 // Asm: VPUNPCKHDQ, CPU Feature: AVX
-func (x Uint32x4) InterleaveHi(y Uint32x4) Uint32x4
+func (x Int32x4) InterleaveHi(y Int32x4) (z Int32x4)
 
 // InterleaveHi interleaves the elements of the high halves of x and y.
 //
+//	z = {x[1], y[1]}
+//
 // Asm: VPUNPCKHQDQ, CPU Feature: AVX
-func (x Uint64x2) InterleaveHi(y Uint64x2) Uint64x2
+func (x Int64x2) InterleaveHi(y Int64x2) (z Int64x2)
+
+// InterleaveHi interleaves the elements of the high halves of x and y.
+//
+//	z = {x[n/2], y[n/2], x[n/2+1], y[n/2+1], ..., x[n-1], y[n-1]}, where n = 16
+//
+// Asm: VPUNPCKHBW, CPU Feature: AVX
+func (x Uint8x16) InterleaveHi(y Uint8x16) (z Uint8x16)
+
+// InterleaveHi interleaves the elements of the high halves of x and y.
+//
+//	z = {x[n/2], y[n/2], x[n/2+1], y[n/2+1], ..., x[n-1], y[n-1]}, where n = 8
+//
+// Asm: VPUNPCKHWD, CPU Feature: AVX
+func (x Uint16x8) InterleaveHi(y Uint16x8) (z Uint16x8)
+
+// InterleaveHi interleaves the elements of the high halves of x and y.
+//
+//	z = {x[2], y[2], x[3], y[3]}
+//
+// Asm: VPUNPCKHDQ, CPU Feature: AVX
+func (x Uint32x4) InterleaveHi(y Uint32x4) (z Uint32x4)
+
+// InterleaveHi interleaves the elements of the high halves of x and y.
+//
+//	z = {x[1], y[1]}
+//
+// Asm: VPUNPCKHQDQ, CPU Feature: AVX
+func (x Uint64x2) InterleaveHi(y Uint64x2) (z Uint64x2)
 
 /* InterleaveHiGrouped */
 
@@ -3961,43 +4023,59 @@ func (x Uint64x8) InterleaveHiGrouped(y Uint64x8) Uint64x8
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
 //
-// Asm: VPUNPCKLBW, CPU Feature: AVX
-func (x Int8x16) InterleaveLo(y Int8x16) Int8x16
-
-// InterleaveLo interleaves the elements of the low halves of x and y.
-//
-// Asm: VPUNPCKLWD, CPU Feature: AVX
-func (x Int16x8) InterleaveLo(y Int16x8) Int16x8
-
-// InterleaveLo interleaves the elements of the low halves of x and y.
-//
-// Asm: VPUNPCKLDQ, CPU Feature: AVX
-func (x Int32x4) InterleaveLo(y Int32x4) Int32x4
-
-// InterleaveLo interleaves the elements of the low halves of x and y.
-//
-// Asm: VPUNPCKLQDQ, CPU Feature: AVX
-func (x Int64x2) InterleaveLo(y Int64x2) Int64x2
-
-// InterleaveLo interleaves the elements of the low halves of x and y.
+//	z = {x[0], y[0], x[1], y[1], ..., x[n/2-1], y[n/2-1]}, where n = 16
 //
 // Asm: VPUNPCKLBW, CPU Feature: AVX
-func (x Uint8x16) InterleaveLo(y Uint8x16) Uint8x16
+func (x Int8x16) InterleaveLo(y Int8x16) (z Int8x16)
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
+//
+//	z = {x[0], y[0], x[1], y[1], ..., x[n/2-1], y[n/2-1]}, where n = 8
 //
 // Asm: VPUNPCKLWD, CPU Feature: AVX
-func (x Uint16x8) InterleaveLo(y Uint16x8) Uint16x8
+func (x Int16x8) InterleaveLo(y Int16x8) (z Int16x8)
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
+//
+//	z = {x[0], y[0], x[1], y[1]}
 //
 // Asm: VPUNPCKLDQ, CPU Feature: AVX
-func (x Uint32x4) InterleaveLo(y Uint32x4) Uint32x4
+func (x Int32x4) InterleaveLo(y Int32x4) (z Int32x4)
 
 // InterleaveLo interleaves the elements of the low halves of x and y.
 //
+//	z = {x[0], y[0]}
+//
 // Asm: VPUNPCKLQDQ, CPU Feature: AVX
-func (x Uint64x2) InterleaveLo(y Uint64x2) Uint64x2
+func (x Int64x2) InterleaveLo(y Int64x2) (z Int64x2)
+
+// InterleaveLo interleaves the elements of the low halves of x and y.
+//
+//	z = {x[0], y[0], x[1], y[1], ..., x[n/2-1], y[n/2-1]}, where n = 16
+//
+// Asm: VPUNPCKLBW, CPU Feature: AVX
+func (x Uint8x16) InterleaveLo(y Uint8x16) (z Uint8x16)
+
+// InterleaveLo interleaves the elements of the low halves of x and y.
+//
+//	z = {x[0], y[0], x[1], y[1], ..., x[n/2-1], y[n/2-1]}, where n = 8
+//
+// Asm: VPUNPCKLWD, CPU Feature: AVX
+func (x Uint16x8) InterleaveLo(y Uint16x8) (z Uint16x8)
+
+// InterleaveLo interleaves the elements of the low halves of x and y.
+//
+//	z = {x[0], y[0], x[1], y[1]}
+//
+// Asm: VPUNPCKLDQ, CPU Feature: AVX
+func (x Uint32x4) InterleaveLo(y Uint32x4) (z Uint32x4)
+
+// InterleaveLo interleaves the elements of the low halves of x and y.
+//
+//	z = {x[0], y[0]}
+//
+// Asm: VPUNPCKLQDQ, CPU Feature: AVX
+func (x Uint64x2) InterleaveLo(y Uint64x2) (z Uint64x2)
 
 /* InterleaveLoGrouped */
 
@@ -6232,6 +6310,18 @@ func (x Float32x8) Round() (z Float32x8)
 // Round(x) = -0 for -0.5 <= x < -0, and Round(NaN) = NaN. The sign and payload
 // of a NaN result are unspecified.
 //
+// Asm: VRNDSCALEPS, CPU Feature: AVX512
+func (x Float32x16) Round() (z Float32x16)
+
+// Round returns the nearest integer value to each element of x, rounding ties
+// to even.
+//
+//	z[i] = roundToEven(x[i])
+//
+// Special cases follow IEEE 754: Round(±0) = ±0, Round(±Inf) = ±Inf,
+// Round(x) = -0 for -0.5 <= x < -0, and Round(NaN) = NaN. The sign and payload
+// of a NaN result are unspecified.
+//
 // Asm: VROUNDPD, CPU Feature: AVX
 func (x Float64x2) Round() (z Float64x2)
 
@@ -6246,6 +6336,18 @@ func (x Float64x2) Round() (z Float64x2)
 //
 // Asm: VROUNDPD, CPU Feature: AVX
 func (x Float64x4) Round() (z Float64x4)
+
+// Round returns the nearest integer value to each element of x, rounding ties
+// to even.
+//
+//	z[i] = roundToEven(x[i])
+//
+// Special cases follow IEEE 754: Round(±0) = ±0, Round(±Inf) = ±Inf,
+// Round(x) = -0 for -0.5 <= x < -0, and Round(NaN) = NaN. The sign and payload
+// of a NaN result are unspecified.
+//
+// Asm: VRNDSCALEPD, CPU Feature: AVX512
+func (x Float64x8) Round() (z Float64x8)
 
 /* RoundScaled */
 
@@ -8647,6 +8749,17 @@ func (x Float32x8) Trunc() (z Float32x8)
 // Trunc(x) = -0 for -1 < x < -0, and Trunc(NaN) = NaN. The sign and payload of
 // a NaN result are unspecified.
 //
+// Asm: VRNDSCALEPS, CPU Feature: AVX512
+func (x Float32x16) Trunc() (z Float32x16)
+
+// Trunc returns the integer value of each element of x, rounded toward zero.
+//
+//	z[i] = trunc(x[i])
+//
+// Special cases follow IEEE 754: Trunc(±0) = ±0, Trunc(±Inf) = ±Inf,
+// Trunc(x) = -0 for -1 < x < -0, and Trunc(NaN) = NaN. The sign and payload of
+// a NaN result are unspecified.
+//
 // Asm: VROUNDPD, CPU Feature: AVX
 func (x Float64x2) Trunc() (z Float64x2)
 
@@ -8660,6 +8773,17 @@ func (x Float64x2) Trunc() (z Float64x2)
 //
 // Asm: VROUNDPD, CPU Feature: AVX
 func (x Float64x4) Trunc() (z Float64x4)
+
+// Trunc returns the integer value of each element of x, rounded toward zero.
+//
+//	z[i] = trunc(x[i])
+//
+// Special cases follow IEEE 754: Trunc(±0) = ±0, Trunc(±Inf) = ±Inf,
+// Trunc(x) = -0 for -1 < x < -0, and Trunc(NaN) = NaN. The sign and payload of
+// a NaN result are unspecified.
+//
+// Asm: VRNDSCALEPD, CPU Feature: AVX512
+func (x Float64x8) Trunc() (z Float64x8)
 
 /* TruncScaled */
 
