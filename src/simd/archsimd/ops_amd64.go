@@ -182,16 +182,6 @@ func (x Int32x16) Abs() (z Uint32x16)
 // Abs returns the elementwise absolute value of x.
 //
 // Asm: VPABSQ, CPU Feature: AVX512
-func (x Int64x2) Abs() (z Uint64x2)
-
-// Abs returns the elementwise absolute value of x.
-//
-// Asm: VPABSQ, CPU Feature: AVX512
-func (x Int64x4) Abs() (z Uint64x4)
-
-// Abs returns the elementwise absolute value of x.
-//
-// Asm: VPABSQ, CPU Feature: AVX512
 func (x Int64x8) Abs() (z Uint64x8)
 
 /* Add */
@@ -7456,22 +7446,6 @@ func (x Int32x8) ShiftAllRight(shift uint64) (z Int32x8)
 //
 // Asm: VPSRAD, CPU Feature: AVX512
 func (x Int32x16) ShiftAllRight(shift uint64) (z Int32x16)
-
-// ShiftAllRight arithmetically shifts each element of x right by shift bits.
-// If shift is greater than the element width, the result is 0 or -1.
-//
-//	z[i] = x[i] >> shift
-//
-// Asm: VPSRAQ, CPU Feature: AVX512
-func (x Int64x2) ShiftAllRight(shift uint64) (z Int64x2)
-
-// ShiftAllRight arithmetically shifts each element of x right by shift bits.
-// If shift is greater than the element width, the result is 0 or -1.
-//
-//	z[i] = x[i] >> shift
-//
-// Asm: VPSRAQ, CPU Feature: AVX512
-func (x Int64x4) ShiftAllRight(shift uint64) (z Int64x4)
 
 // ShiftAllRight arithmetically shifts each element of x right by shift bits.
 // If shift is greater than the element width, the result is 0 or -1.

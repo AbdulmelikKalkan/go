@@ -7487,7 +7487,6 @@ const (
 	OpAbsInt32x8
 	OpAbsInt64s
 	OpAbsInt64x2
-	OpAbsInt64x4
 	OpAbsInt64x8
 	OpAbsInt8s
 	OpAbsInt8x16
@@ -8869,7 +8868,6 @@ const (
 	OpShiftAllRightInt32x4
 	OpShiftAllRightInt32x8
 	OpShiftAllRightInt64x2
-	OpShiftAllRightInt64x4
 	OpShiftAllRightInt64x8
 	OpShiftAllRightInt8x16
 	OpShiftAllRightUint16x16
@@ -117297,11 +117295,6 @@ var OpcodeTable = [...]OpInfo{
 		Generic: true,
 	},
 	{
-		Name:    "AbsInt64x4",
-		ArgLen:  1,
-		Generic: true,
-	},
-	{
 		Name:    "AbsInt64x8",
 		ArgLen:  1,
 		Generic: true,
@@ -124655,11 +124648,6 @@ var OpcodeTable = [...]OpInfo{
 	},
 	{
 		Name:    "ShiftAllRightInt64x2",
-		ArgLen:  2,
-		Generic: true,
-	},
-	{
-		Name:    "ShiftAllRightInt64x4",
 		ArgLen:  2,
 		Generic: true,
 	},
