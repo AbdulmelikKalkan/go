@@ -352,15 +352,17 @@ func (x Int8s) ReduceSum() (z int8) {
 
 // Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Int8s) Store(s []int8) {
-	for i := 0; i < 16 && i < len(s); i++ {
+	_ = s[x.Len()-1] // Panic if s is too short.
+	for i := 0; i < 16; i++ {
 		s[i] = x.get(i)
 	}
 }
 
 // StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
 func (x Int8s) StorePart(s []int8) (n int) {
-	x.Store(s)
-	return min(len(s), x.Len())
+	var buf [16]int8
+	x.Store(buf[:])
+	return copy(s, buf[:])
 }
 
 // String returns x in the form "{x[0],x[1],...}".
@@ -759,15 +761,17 @@ func (x Int16s) ReduceSum() (z int16) {
 
 // Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Int16s) Store(s []int16) {
-	for i := 0; i < 8 && i < len(s); i++ {
+	_ = s[x.Len()-1] // Panic if s is too short.
+	for i := 0; i < 8; i++ {
 		s[i] = x.get(i)
 	}
 }
 
 // StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
 func (x Int16s) StorePart(s []int16) (n int) {
-	x.Store(s)
-	return min(len(s), x.Len())
+	var buf [8]int16
+	x.Store(buf[:])
+	return copy(s, buf[:])
 }
 
 // String returns x in the form "{x[0],x[1],...}".
@@ -1159,15 +1163,17 @@ func (x Int32s) ReduceSum() (z int32) {
 
 // Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Int32s) Store(s []int32) {
-	for i := 0; i < 4 && i < len(s); i++ {
+	_ = s[x.Len()-1] // Panic if s is too short.
+	for i := 0; i < 4; i++ {
 		s[i] = x.get(i)
 	}
 }
 
 // StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
 func (x Int32s) StorePart(s []int32) (n int) {
-	x.Store(s)
-	return min(len(s), x.Len())
+	var buf [4]int32
+	x.Store(buf[:])
+	return copy(s, buf[:])
 }
 
 // String returns x in the form "{x[0],x[1],...}".
@@ -1454,6 +1460,7 @@ func (x Int64s) ShiftAllRight(shift uint64) (z Int64s) {
 
 // Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Int64s) Store(s []int64) {
+	_ = s[x.Len()-1] // Panic if s is too short.
 	if len(s) > 0 {
 		s[0] = int64(x.a)
 	}
@@ -1464,8 +1471,9 @@ func (x Int64s) Store(s []int64) {
 
 // StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
 func (x Int64s) StorePart(s []int64) (n int) {
-	x.Store(s)
-	return min(len(s), x.Len())
+	var buf [2]int64
+	x.Store(buf[:])
+	return copy(s, buf[:])
 }
 
 // String returns x in the form "{x[0],x[1],...}".
@@ -1799,15 +1807,17 @@ func (x Uint8s) ReduceSum() (z uint8) {
 
 // Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Uint8s) Store(s []uint8) {
-	for i := 0; i < 16 && i < len(s); i++ {
+	_ = s[x.Len()-1] // Panic if s is too short.
+	for i := 0; i < 16; i++ {
 		s[i] = x.get(i)
 	}
 }
 
 // StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
 func (x Uint8s) StorePart(s []uint8) (n int) {
-	x.Store(s)
-	return min(len(s), x.Len())
+	var buf [16]uint8
+	x.Store(buf[:])
+	return copy(s, buf[:])
 }
 
 // String returns x in the form "{x[0],x[1],...}".
@@ -2243,15 +2253,17 @@ func (x Uint16s) ReduceSum() (z uint16) {
 
 // Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Uint16s) Store(s []uint16) {
-	for i := 0; i < 8 && i < len(s); i++ {
+	_ = s[x.Len()-1] // Panic if s is too short.
+	for i := 0; i < 8; i++ {
 		s[i] = x.get(i)
 	}
 }
 
 // StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
 func (x Uint16s) StorePart(s []uint16) (n int) {
-	x.Store(s)
-	return min(len(s), x.Len())
+	var buf [8]uint16
+	x.Store(buf[:])
+	return copy(s, buf[:])
 }
 
 // String returns x in the form "{x[0],x[1],...}".
@@ -2660,15 +2672,17 @@ func (x Uint32s) ReduceSum() (z uint32) {
 
 // Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Uint32s) Store(s []uint32) {
-	for i := 0; i < 4 && i < len(s); i++ {
+	_ = s[x.Len()-1] // Panic if s is too short.
+	for i := 0; i < 4; i++ {
 		s[i] = x.get(i)
 	}
 }
 
 // StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
 func (x Uint32s) StorePart(s []uint32) (n int) {
-	x.Store(s)
-	return min(len(s), x.Len())
+	var buf [4]uint32
+	x.Store(buf[:])
+	return copy(s, buf[:])
 }
 
 // String returns x in the form "{x[0],x[1],...}".
@@ -2979,6 +2993,7 @@ func (x Uint64s) RotateAllRight(shift uint64) (z Uint64s) {
 
 // Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Uint64s) Store(s []uint64) {
+	_ = s[x.Len()-1] // Panic if s is too short.
 	if len(s) > 0 {
 		s[0] = x.a
 	}
@@ -2989,8 +3004,9 @@ func (x Uint64s) Store(s []uint64) {
 
 // StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
 func (x Uint64s) StorePart(s []uint64) (n int) {
-	x.Store(s)
-	return min(len(s), x.Len())
+	var buf [2]uint64
+	x.Store(buf[:])
+	return copy(s, buf[:])
 }
 
 // String returns x in the form "{x[0],x[1],...}".
@@ -3457,15 +3473,17 @@ func (x Float32s) Sqrt() (z Float32s) {
 
 // Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Float32s) Store(s []float32) {
-	for i := 0; i < 4 && i < len(s); i++ {
+	_ = s[x.Len()-1] // Panic if s is too short.
+	for i := 0; i < 4; i++ {
 		s[i] = x.get(i)
 	}
 }
 
 // StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
 func (x Float32s) StorePart(s []float32) (n int) {
-	x.Store(s)
-	return min(len(s), x.Len())
+	var buf [4]float32
+	x.Store(buf[:])
+	return copy(s, buf[:])
 }
 
 // String returns x in the form "{x[0],x[1],...}".
@@ -3860,6 +3878,7 @@ func (x Float64s) Sqrt() (z Float64s) {
 
 // Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Float64s) Store(s []float64) {
+	_ = s[x.Len()-1] // Panic if s is too short.
 	if len(s) > 0 {
 		s[0] = x.get(0)
 	}
@@ -3870,8 +3889,9 @@ func (x Float64s) Store(s []float64) {
 
 // StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
 func (x Float64s) StorePart(s []float64) (n int) {
-	x.Store(s)
-	return min(len(s), x.Len())
+	var buf [2]float64
+	x.Store(buf[:])
+	return copy(s, buf[:])
 }
 
 // String returns x in the form "{x[0],x[1],...}".
@@ -3932,11 +3952,6 @@ func (x Mask8s) And(y Mask8s) (z Mask8s) {
 //	z[i] = x[i] &^ y[i]
 func (x Mask8s) AndNot(y Mask8s) (z Mask8s) {
 	return Mask8s{a: x.a &^ y.a, b: x.b &^ y.b}
-}
-
-// Equal returns a mask indicating which elements of x and y are equal.
-func (x Mask8s) Equal(y Mask8s) (z Mask8s) {
-	return Mask8s{a: ^(x.a ^ y.a), b: ^(x.b ^ y.b)}
 }
 
 // Not returns the bitwise negation of x.
@@ -4000,11 +4015,6 @@ func (x Mask16s) AndNot(y Mask16s) (z Mask16s) {
 	return Mask16s{a: x.a &^ y.a, b: x.b &^ y.b}
 }
 
-// Equal returns a mask indicating which elements of x and y are equal.
-func (x Mask16s) Equal(y Mask16s) (z Mask16s) {
-	return Mask16s{a: ^(x.a ^ y.a), b: ^(x.b ^ y.b)}
-}
-
 // Not returns the bitwise negation of x.
 //
 //	z[i] = ^x[i]
@@ -4066,11 +4076,6 @@ func (x Mask32s) AndNot(y Mask32s) (z Mask32s) {
 	return Mask32s{a: x.a &^ y.a, b: x.b &^ y.b}
 }
 
-// Equal returns a mask indicating which elements of x and y are equal.
-func (x Mask32s) Equal(y Mask32s) (z Mask32s) {
-	return Mask32s{a: ^(x.a ^ y.a), b: ^(x.b ^ y.b)}
-}
-
 // Not returns the bitwise negation of x.
 //
 //	z[i] = ^x[i]
@@ -4128,11 +4133,6 @@ func (x Mask64s) And(y Mask64s) (z Mask64s) {
 //	z[i] = x[i] &^ y[i]
 func (x Mask64s) AndNot(y Mask64s) (z Mask64s) {
 	return Mask64s{a: x.a &^ y.a, b: x.b &^ y.b}
-}
-
-// Equal returns a mask indicating which elements of x and y are equal.
-func (x Mask64s) Equal(y Mask64s) (z Mask64s) {
-	return Mask64s{a: ^(x.a ^ y.a), b: ^(x.b ^ y.b)}
 }
 
 // Not returns the bitwise negation of x.
