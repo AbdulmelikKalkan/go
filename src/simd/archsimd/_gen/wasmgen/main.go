@@ -1193,7 +1193,7 @@ type {{.Name}} struct {
 var maskTypeDecl = templateOf("type decl", `
 // {{.Name}} is a 128-bit SIMD mask of {{.Count}} {{.Elem}}s.
 type {{.Name}} struct {
-	{{.Elem}}x{{.Count}} v128
+	mask{{slice .Elem 3}}x{{.Count}} v128
 	vals      [{{.Count}}]{{.Elem}}
 }
 `)
@@ -1867,6 +1867,11 @@ func genWasmSSA(f *bytes.Buffer) {
 				fmt.Fprintf(f,
 					`		getValue128(s, v.Args[0])
 		s.Prog(v.Op.Asm())
+		if extend && v.Type.IsBoolean() {
+			// The tests, like v128.any_true, produce an i32, but
+			// the rest of the backend expects booleans to be i64s.
+			s.Prog(wasm.AI64ExtendI32U)
+		}
 `)
 			case VV:
 				fmt.Fprintf(f,

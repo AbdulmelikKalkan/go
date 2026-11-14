@@ -2043,9 +2043,9 @@ func (x Int32x16) ConcatSaturateToInt16Grouped(y Int32x16) (z Int16x32)
 
 /* ConcatSaturateToUint16 */
 
-// ConcatSaturateToUint16 converts each element of x and y to uint16,
-// saturating values that are outside the range of uint16, and returns the
-// concatenated result. Negative values become 0.
+// ConcatSaturateToUint16 converts each element of x and y to uint16, saturating
+// values that are outside the range of uint16, and returns the concatenated
+// result. Negative values become 0.
 //
 //	z = concat(sat(x[...]), sat(y[...]))
 //
@@ -2054,14 +2054,14 @@ func (x Int32x4) ConcatSaturateToUint16(y Int32x4) (z Uint16x8)
 
 /* ConcatSaturateToUint16Grouped */
 
-// ConcatSaturateToUint16Grouped divides x, y, and z into groups of 128 bits
-// and performs [ConcatSaturateToUint16] on each group.
+// ConcatSaturateToUint16Grouped divides x, y, and z into groups of 128 bits and
+// performs [ConcatSaturateToUint16] on each group.
 //
 // Asm: VPACKUSDW, CPU Feature: AVX2
 func (x Int32x8) ConcatSaturateToUint16Grouped(y Int32x8) (z Uint16x16)
 
-// ConcatSaturateToUint16Grouped divides x, y, and z into groups of 128 bits
-// and performs [ConcatSaturateToUint16] on each group.
+// ConcatSaturateToUint16Grouped divides x, y, and z into groups of 128 bits and
+// performs [ConcatSaturateToUint16] on each group.
 //
 // Asm: VPACKUSDW, CPU Feature: AVX512
 func (x Int32x16) ConcatSaturateToUint16Grouped(y Int32x16) (z Uint16x32)
@@ -2931,6 +2931,168 @@ func (x Uint8x32) DotProductPairsSaturated(y Int8x32) (z Int16x16)
 // Asm: VPMADDUBSW, CPU Feature: AVX512
 func (x Uint8x64) DotProductPairsSaturated(y Int8x64) (z Int16x32)
 
+/* Enlarge */
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVAPS, CPU Feature: AVX
+func (x Float32x4) Enlarge() (z Float32x8)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVAPS, CPU Feature: AVX
+func (x Float32x8) Enlarge() (z Float32x16)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, 0})
+//
+// Asm: VMOVAPD, CPU Feature: AVX
+func (x Float64x2) Enlarge() (z Float64x4)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVAPD, CPU Feature: AVX
+func (x Float64x4) Enlarge() (z Float64x8)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Int8x16) Enlarge() (z Int8x32)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Int8x32) Enlarge() (z Int8x64)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Int16x8) Enlarge() (z Int16x16)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Int16x16) Enlarge() (z Int16x32)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Int32x4) Enlarge() (z Int32x8)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Int32x8) Enlarge() (z Int32x16)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Int64x2) Enlarge() (z Int64x4)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Int64x4) Enlarge() (z Int64x8)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Uint8x16) Enlarge() (z Uint8x32)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Uint8x32) Enlarge() (z Uint8x64)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Uint16x8) Enlarge() (z Uint16x16)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Uint16x16) Enlarge() (z Uint16x32)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Uint32x4) Enlarge() (z Uint32x8)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Uint32x8) Enlarge() (z Uint32x16)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Uint64x2) Enlarge() (z Uint64x4)
+
+// Enlarge returns x with twice as many elements, with the upper half zeroed.
+// [GetLo] reverses this: x.Enlarge().GetLo() returns x.
+//
+//	z = concat(x, {0, ..., 0})
+//
+// Asm: VMOVDQA, CPU Feature: AVX
+func (x Uint64x4) Enlarge() (z Uint64x8)
+
 /* Equal */
 
 // Equal returns a mask indicating which elements of x and y are equal.
@@ -3504,90 +3666,6 @@ func (x Uint64x4) Expand(mask Mask64x4) (z Uint64x4)
 //
 // Asm: VPEXPANDQ, CPU Feature: AVX512
 func (x Uint64x8) Expand(mask Mask64x8) (z Uint64x8)
-
-/* ExtendLo4ToInt64 */
-
-// ExtendLo4ToInt64 sign-extends the low 4 elements of x to int64.
-//
-//	z[i] = int64(x[i])
-//
-// Deprecated: use Int8x32{}.SetLo(x).ExtendToInt64() instead.
-//
-// Asm: VPMOVSXBQ, CPU Feature: AVX2
-func (x Int8x16) ExtendLo4ToInt64() (z Int64x4)
-
-// ExtendLo4ToInt64 sign-extends the low 4 elements of x to int64.
-//
-//	z[i] = int64(x[i])
-//
-// Deprecated: use Int16x16{}.SetLo(x).ExtendToInt64() instead.
-//
-// Asm: VPMOVSXWQ, CPU Feature: AVX2
-func (x Int16x8) ExtendLo4ToInt64() (z Int64x4)
-
-/* ExtendLo4ToUint64 */
-
-// ExtendLo4ToUint64 zero-extends the low 4 elements of x to uint64.
-//
-//	z[i] = uint64(x[i])
-//
-// Deprecated: use Uint8x32{}.SetLo(x).ExtendToUint64() instead.
-//
-// Asm: VPMOVZXBQ, CPU Feature: AVX2
-func (x Uint8x16) ExtendLo4ToUint64() (z Uint64x4)
-
-// ExtendLo4ToUint64 zero-extends the low 4 elements of x to uint64.
-//
-//	z[i] = uint64(x[i])
-//
-// Deprecated: use Uint16x16{}.SetLo(x).ExtendToUint64() instead.
-//
-// Asm: VPMOVZXWQ, CPU Feature: AVX2
-func (x Uint16x8) ExtendLo4ToUint64() (z Uint64x4)
-
-/* ExtendLo8ToInt32 */
-
-// ExtendLo8ToInt32 sign-extends the low 8 elements of x to int32.
-//
-//	z[i] = int32(x[i])
-//
-// Deprecated: use Int8x32{}.SetLo(x).ExtendToInt32() instead.
-//
-// Asm: VPMOVSXBD, CPU Feature: AVX2
-func (x Int8x16) ExtendLo8ToInt32() (z Int32x8)
-
-/* ExtendLo8ToInt64 */
-
-// ExtendLo8ToInt64 sign-extends the low 8 elements of x to int64.
-//
-//	z[i] = int64(x[i])
-//
-// Deprecated: use Int8x64{}.SetLo(Int8x32{}.SetLo(x)).ExtendToInt64() instead.
-//
-// Asm: VPMOVSXBQ, CPU Feature: AVX512
-func (x Int8x16) ExtendLo8ToInt64() (z Int64x8)
-
-/* ExtendLo8ToUint32 */
-
-// ExtendLo8ToUint32 zero-extends the low 8 elements of x to uint32.
-//
-//	z[i] = uint32(x[i])
-//
-// Deprecated: use Uint8x32{}.SetLo(x).ExtendToUint32() instead.
-//
-// Asm: VPMOVZXBD, CPU Feature: AVX2
-func (x Uint8x16) ExtendLo8ToUint32() (z Uint32x8)
-
-/* ExtendLo8ToUint64 */
-
-// ExtendLo8ToUint64 zero-extends the low 8 elements of x to uint64.
-//
-//	z[i] = uint64(x[i])
-//
-// Deprecated: use Uint8x64{}.SetLo(Uint8x32{}.SetLo(x)).ExtendToUint64() instead.
-//
-// Asm: VPMOVZXBQ, CPU Feature: AVX512
-func (x Uint8x16) ExtendLo8ToUint64() (z Uint64x8)
 
 /* ExtendToInt16 */
 
@@ -4468,12 +4546,16 @@ func (x Uint64x8) GetHi() (z Uint64x4)
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 8
 //
+// See also [Enlarge].
+//
 // Asm: VEXTRACTF128, CPU Feature: AVX
 func (x Float32x8) GetLo() (z Float32x4)
 
 // GetLo returns the lower half of x.
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 16
+//
+// See also [Enlarge].
 //
 // Asm: VEXTRACTF64X4, CPU Feature: AVX512
 func (x Float32x16) GetLo() (z Float32x8)
@@ -4482,12 +4564,16 @@ func (x Float32x16) GetLo() (z Float32x8)
 //
 //	z = {x[0], x[1]}
 //
+// See also [Enlarge].
+//
 // Asm: VEXTRACTF128, CPU Feature: AVX
 func (x Float64x4) GetLo() (z Float64x2)
 
 // GetLo returns the lower half of x.
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 8
+//
+// See also [Enlarge].
 //
 // Asm: VEXTRACTF64X4, CPU Feature: AVX512
 func (x Float64x8) GetLo() (z Float64x4)
@@ -4496,12 +4582,16 @@ func (x Float64x8) GetLo() (z Float64x4)
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 32
 //
+// See also [Enlarge].
+//
 // Asm: VEXTRACTI128, CPU Feature: AVX2
 func (x Int8x32) GetLo() (z Int8x16)
 
 // GetLo returns the lower half of x.
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 64
+//
+// See also [Enlarge].
 //
 // Asm: VEXTRACTI64X4, CPU Feature: AVX512
 func (x Int8x64) GetLo() (z Int8x32)
@@ -4510,12 +4600,16 @@ func (x Int8x64) GetLo() (z Int8x32)
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 16
 //
+// See also [Enlarge].
+//
 // Asm: VEXTRACTI128, CPU Feature: AVX2
 func (x Int16x16) GetLo() (z Int16x8)
 
 // GetLo returns the lower half of x.
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 32
+//
+// See also [Enlarge].
 //
 // Asm: VEXTRACTI64X4, CPU Feature: AVX512
 func (x Int16x32) GetLo() (z Int16x16)
@@ -4524,12 +4618,16 @@ func (x Int16x32) GetLo() (z Int16x16)
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 8
 //
+// See also [Enlarge].
+//
 // Asm: VEXTRACTI128, CPU Feature: AVX2
 func (x Int32x8) GetLo() (z Int32x4)
 
 // GetLo returns the lower half of x.
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 16
+//
+// See also [Enlarge].
 //
 // Asm: VEXTRACTI64X4, CPU Feature: AVX512
 func (x Int32x16) GetLo() (z Int32x8)
@@ -4538,12 +4636,16 @@ func (x Int32x16) GetLo() (z Int32x8)
 //
 //	z = {x[0], x[1]}
 //
+// See also [Enlarge].
+//
 // Asm: VEXTRACTI128, CPU Feature: AVX2
 func (x Int64x4) GetLo() (z Int64x2)
 
 // GetLo returns the lower half of x.
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 8
+//
+// See also [Enlarge].
 //
 // Asm: VEXTRACTI64X4, CPU Feature: AVX512
 func (x Int64x8) GetLo() (z Int64x4)
@@ -4552,12 +4654,16 @@ func (x Int64x8) GetLo() (z Int64x4)
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 32
 //
+// See also [Enlarge].
+//
 // Asm: VEXTRACTI128, CPU Feature: AVX2
 func (x Uint8x32) GetLo() (z Uint8x16)
 
 // GetLo returns the lower half of x.
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 64
+//
+// See also [Enlarge].
 //
 // Asm: VEXTRACTI64X4, CPU Feature: AVX512
 func (x Uint8x64) GetLo() (z Uint8x32)
@@ -4566,12 +4672,16 @@ func (x Uint8x64) GetLo() (z Uint8x32)
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 16
 //
+// See also [Enlarge].
+//
 // Asm: VEXTRACTI128, CPU Feature: AVX2
 func (x Uint16x16) GetLo() (z Uint16x8)
 
 // GetLo returns the lower half of x.
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 32
+//
+// See also [Enlarge].
 //
 // Asm: VEXTRACTI64X4, CPU Feature: AVX512
 func (x Uint16x32) GetLo() (z Uint16x16)
@@ -4580,12 +4690,16 @@ func (x Uint16x32) GetLo() (z Uint16x16)
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 8
 //
+// See also [Enlarge].
+//
 // Asm: VEXTRACTI128, CPU Feature: AVX2
 func (x Uint32x8) GetLo() (z Uint32x4)
 
 // GetLo returns the lower half of x.
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 16
+//
+// See also [Enlarge].
 //
 // Asm: VEXTRACTI64X4, CPU Feature: AVX512
 func (x Uint32x16) GetLo() (z Uint32x8)
@@ -4594,12 +4708,16 @@ func (x Uint32x16) GetLo() (z Uint32x8)
 //
 //	z = {x[0], x[1]}
 //
+// See also [Enlarge].
+//
 // Asm: VEXTRACTI128, CPU Feature: AVX2
 func (x Uint64x4) GetLo() (z Uint64x2)
 
 // GetLo returns the lower half of x.
 //
 //	z = {x[0], x[1], ..., x[n/2-1]}, where n = 8
+//
+// See also [Enlarge].
 //
 // Asm: VEXTRACTI64X4, CPU Feature: AVX512
 func (x Uint64x8) GetLo() (z Uint64x4)
@@ -6580,99 +6698,213 @@ func (x Float64x8) MulAdd(y Float64x8, z Float64x8) (w Float64x8)
 
 /* MulAddEvenSubOdd */
 
-// MulAddEvenSubOdd performs a fused (x * y) - z for odd-indexed elements, and (x * y) + z for even-indexed elements.
+// MulAddEvenSubOdd returns x * y + z for the even-indexed elements and
+// x * y - z for the odd-indexed elements.
+//
+//	w[2*i] = x[2*i] * y[2*i] + z[2*i]         // Add even
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] - z[2*i+1] // Subtract odd
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMSUBADD213PS, CPU Feature: FMA
-func (x Float32x4) MulAddEvenSubOdd(y Float32x4, z Float32x4) Float32x4
+func (x Float32x4) MulAddEvenSubOdd(y Float32x4, z Float32x4) (w Float32x4)
 
-// MulAddEvenSubOdd performs a fused (x * y) - z for odd-indexed elements, and (x * y) + z for even-indexed elements.
+// MulAddEvenSubOdd returns x * y + z for the even-indexed elements and
+// x * y - z for the odd-indexed elements.
+//
+//	w[2*i] = x[2*i] * y[2*i] + z[2*i]         // Add even
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] - z[2*i+1] // Subtract odd
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMSUBADD213PS, CPU Feature: FMA
-func (x Float32x8) MulAddEvenSubOdd(y Float32x8, z Float32x8) Float32x8
+func (x Float32x8) MulAddEvenSubOdd(y Float32x8, z Float32x8) (w Float32x8)
 
-// MulAddEvenSubOdd performs a fused (x * y) - z for odd-indexed elements, and (x * y) + z for even-indexed elements.
+// MulAddEvenSubOdd returns x * y + z for the even-indexed elements and
+// x * y - z for the odd-indexed elements.
+//
+//	w[2*i] = x[2*i] * y[2*i] + z[2*i]         // Add even
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] - z[2*i+1] // Subtract odd
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMSUBADD213PS, CPU Feature: AVX512
-func (x Float32x16) MulAddEvenSubOdd(y Float32x16, z Float32x16) Float32x16
+func (x Float32x16) MulAddEvenSubOdd(y Float32x16, z Float32x16) (w Float32x16)
 
-// MulAddEvenSubOdd performs a fused (x * y) - z for odd-indexed elements, and (x * y) + z for even-indexed elements.
+// MulAddEvenSubOdd returns x * y + z for the even-indexed elements and
+// x * y - z for the odd-indexed elements.
+//
+//	w[2*i] = x[2*i] * y[2*i] + z[2*i]         // Add even
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] - z[2*i+1] // Subtract odd
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMSUBADD213PD, CPU Feature: FMA
-func (x Float64x2) MulAddEvenSubOdd(y Float64x2, z Float64x2) Float64x2
+func (x Float64x2) MulAddEvenSubOdd(y Float64x2, z Float64x2) (w Float64x2)
 
-// MulAddEvenSubOdd performs a fused (x * y) - z for odd-indexed elements, and (x * y) + z for even-indexed elements.
+// MulAddEvenSubOdd returns x * y + z for the even-indexed elements and
+// x * y - z for the odd-indexed elements.
+//
+//	w[2*i] = x[2*i] * y[2*i] + z[2*i]         // Add even
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] - z[2*i+1] // Subtract odd
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMSUBADD213PD, CPU Feature: FMA
-func (x Float64x4) MulAddEvenSubOdd(y Float64x4, z Float64x4) Float64x4
+func (x Float64x4) MulAddEvenSubOdd(y Float64x4, z Float64x4) (w Float64x4)
 
-// MulAddEvenSubOdd performs a fused (x * y) - z for odd-indexed elements, and (x * y) + z for even-indexed elements.
+// MulAddEvenSubOdd returns x * y + z for the even-indexed elements and
+// x * y - z for the odd-indexed elements.
+//
+//	w[2*i] = x[2*i] * y[2*i] + z[2*i]         // Add even
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] - z[2*i+1] // Subtract odd
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMSUBADD213PD, CPU Feature: AVX512
-func (x Float64x8) MulAddEvenSubOdd(y Float64x8, z Float64x8) Float64x8
+func (x Float64x8) MulAddEvenSubOdd(y Float64x8, z Float64x8) (w Float64x8)
 
 /* MulAddOddSubEven */
 
-// MulAddOddSubEven performs a fused (x * y) + z for odd-indexed elements, and (x * y) - z for even-indexed elements.
+// MulAddOddSubEven returns x * y + z for the odd-indexed elements and
+// x * y - z for the even-indexed elements.
+//
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] + z[2*i+1] // Add odd
+//	w[2*i] = x[2*i] * y[2*i] - z[2*i]         // Subtract even
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMADDSUB213PS, CPU Feature: FMA
-func (x Float32x4) MulAddOddSubEven(y Float32x4, z Float32x4) Float32x4
+func (x Float32x4) MulAddOddSubEven(y Float32x4, z Float32x4) (w Float32x4)
 
-// MulAddOddSubEven performs a fused (x * y) + z for odd-indexed elements, and (x * y) - z for even-indexed elements.
+// MulAddOddSubEven returns x * y + z for the odd-indexed elements and
+// x * y - z for the even-indexed elements.
+//
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] + z[2*i+1] // Add odd
+//	w[2*i] = x[2*i] * y[2*i] - z[2*i]         // Subtract even
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMADDSUB213PS, CPU Feature: FMA
-func (x Float32x8) MulAddOddSubEven(y Float32x8, z Float32x8) Float32x8
+func (x Float32x8) MulAddOddSubEven(y Float32x8, z Float32x8) (w Float32x8)
 
-// MulAddOddSubEven performs a fused (x * y) + z for odd-indexed elements, and (x * y) - z for even-indexed elements.
+// MulAddOddSubEven returns x * y + z for the odd-indexed elements and
+// x * y - z for the even-indexed elements.
+//
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] + z[2*i+1] // Add odd
+//	w[2*i] = x[2*i] * y[2*i] - z[2*i]         // Subtract even
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMADDSUB213PS, CPU Feature: AVX512
-func (x Float32x16) MulAddOddSubEven(y Float32x16, z Float32x16) Float32x16
+func (x Float32x16) MulAddOddSubEven(y Float32x16, z Float32x16) (w Float32x16)
 
-// MulAddOddSubEven performs a fused (x * y) + z for odd-indexed elements, and (x * y) - z for even-indexed elements.
+// MulAddOddSubEven returns x * y + z for the odd-indexed elements and
+// x * y - z for the even-indexed elements.
+//
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] + z[2*i+1] // Add odd
+//	w[2*i] = x[2*i] * y[2*i] - z[2*i]         // Subtract even
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMADDSUB213PD, CPU Feature: FMA
-func (x Float64x2) MulAddOddSubEven(y Float64x2, z Float64x2) Float64x2
+func (x Float64x2) MulAddOddSubEven(y Float64x2, z Float64x2) (w Float64x2)
 
-// MulAddOddSubEven performs a fused (x * y) + z for odd-indexed elements, and (x * y) - z for even-indexed elements.
+// MulAddOddSubEven returns x * y + z for the odd-indexed elements and
+// x * y - z for the even-indexed elements.
+//
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] + z[2*i+1] // Add odd
+//	w[2*i] = x[2*i] * y[2*i] - z[2*i]         // Subtract even
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMADDSUB213PD, CPU Feature: FMA
-func (x Float64x4) MulAddOddSubEven(y Float64x4, z Float64x4) Float64x4
+func (x Float64x4) MulAddOddSubEven(y Float64x4, z Float64x4) (w Float64x4)
 
-// MulAddOddSubEven performs a fused (x * y) + z for odd-indexed elements, and (x * y) - z for even-indexed elements.
+// MulAddOddSubEven returns x * y + z for the odd-indexed elements and
+// x * y - z for the even-indexed elements.
+//
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] + z[2*i+1] // Add odd
+//	w[2*i] = x[2*i] * y[2*i] - z[2*i]         // Subtract even
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
 //
 // Asm: VFMADDSUB213PD, CPU Feature: AVX512
-func (x Float64x8) MulAddOddSubEven(y Float64x8, z Float64x8) Float64x8
+func (x Float64x8) MulAddOddSubEven(y Float64x8, z Float64x8) (w Float64x8)
 
 /* MulHigh */
 
-// MulHigh multiplies elements and stores the high part of the result.
+// MulHigh multiplies corresponding elements of x and y and returns the high
+// half of each double-width product.
+//
+//	z[i] = (x[i] * y[i]) >> 16
+//
+// The product is computed exactly, so no bits are lost before the shift.
 //
 // Asm: VPMULHW, CPU Feature: AVX
-func (x Int16x8) MulHigh(y Int16x8) Int16x8
+func (x Int16x8) MulHigh(y Int16x8) (z Int16x8)
 
-// MulHigh multiplies elements and stores the high part of the result.
+// MulHigh multiplies corresponding elements of x and y and returns the high
+// half of each double-width product.
+//
+//	z[i] = (x[i] * y[i]) >> 16
+//
+// The product is computed exactly, so no bits are lost before the shift.
 //
 // Asm: VPMULHW, CPU Feature: AVX2
-func (x Int16x16) MulHigh(y Int16x16) Int16x16
+func (x Int16x16) MulHigh(y Int16x16) (z Int16x16)
 
-// MulHigh multiplies elements and stores the high part of the result.
+// MulHigh multiplies corresponding elements of x and y and returns the high
+// half of each double-width product.
+//
+//	z[i] = (x[i] * y[i]) >> 16
+//
+// The product is computed exactly, so no bits are lost before the shift.
 //
 // Asm: VPMULHW, CPU Feature: AVX512
-func (x Int16x32) MulHigh(y Int16x32) Int16x32
+func (x Int16x32) MulHigh(y Int16x32) (z Int16x32)
 
-// MulHigh multiplies elements and stores the high part of the result.
+// MulHigh multiplies corresponding elements of x and y and returns the high
+// half of each double-width product.
+//
+//	z[i] = (x[i] * y[i]) >> 16
+//
+// The product is computed exactly, so no bits are lost before the shift.
 //
 // Asm: VPMULHUW, CPU Feature: AVX
-func (x Uint16x8) MulHigh(y Uint16x8) Uint16x8
+func (x Uint16x8) MulHigh(y Uint16x8) (z Uint16x8)
 
-// MulHigh multiplies elements and stores the high part of the result.
+// MulHigh multiplies corresponding elements of x and y and returns the high
+// half of each double-width product.
+//
+//	z[i] = (x[i] * y[i]) >> 16
+//
+// The product is computed exactly, so no bits are lost before the shift.
 //
 // Asm: VPMULHUW, CPU Feature: AVX2
-func (x Uint16x16) MulHigh(y Uint16x16) Uint16x16
+func (x Uint16x16) MulHigh(y Uint16x16) (z Uint16x16)
 
-// MulHigh multiplies elements and stores the high part of the result.
+// MulHigh multiplies corresponding elements of x and y and returns the high
+// half of each double-width product.
+//
+//	z[i] = (x[i] * y[i]) >> 16
+//
+// The product is computed exactly, so no bits are lost before the shift.
 //
 // Asm: VPMULHUW, CPU Feature: AVX512
-func (x Uint16x32) MulHigh(y Uint16x32) Uint16x32
+func (x Uint16x32) MulHigh(y Uint16x32) (z Uint16x32)
 
 /* MulSign */
 
@@ -6708,29 +6940,53 @@ func (x Int32x8) MulSign(y Int32x8) Int32x8
 
 /* MulWidenEven */
 
-// MulWidenEven multiplies even-indexed elements, widening the result.
-// Result[i] = v1[2*i] * v2[2*i].
+// MulWidenEven multiplies corresponding even-indexed elements of x and y,
+// returning a vector of half as many elements, each with twice the input
+// element size.
+//
+//	z[i] = int64(x[2*i]) * int64(y[2*i])
+//
+// The doubled element width is sufficient to hold every product without
+// overflow.
 //
 // Asm: VPMULDQ, CPU Feature: AVX
-func (x Int32x4) MulWidenEven(y Int32x4) Int64x2
+func (x Int32x4) MulWidenEven(y Int32x4) (z Int64x2)
 
-// MulWidenEven multiplies even-indexed elements, widening the result.
-// Result[i] = v1[2*i] * v2[2*i].
+// MulWidenEven multiplies corresponding even-indexed elements of x and y,
+// returning a vector of half as many elements, each with twice the input
+// element size.
+//
+//	z[i] = int64(x[2*i]) * int64(y[2*i])
+//
+// The doubled element width is sufficient to hold every product without
+// overflow.
 //
 // Asm: VPMULDQ, CPU Feature: AVX2
-func (x Int32x8) MulWidenEven(y Int32x8) Int64x4
+func (x Int32x8) MulWidenEven(y Int32x8) (z Int64x4)
 
-// MulWidenEven multiplies even-indexed elements, widening the result.
-// Result[i] = v1[2*i] * v2[2*i].
+// MulWidenEven multiplies corresponding even-indexed elements of x and y,
+// returning a vector of half as many elements, each with twice the input
+// element size.
+//
+//	z[i] = uint64(x[2*i]) * uint64(y[2*i])
+//
+// The doubled element width is sufficient to hold every product without
+// overflow.
 //
 // Asm: VPMULUDQ, CPU Feature: AVX
-func (x Uint32x4) MulWidenEven(y Uint32x4) Uint64x2
+func (x Uint32x4) MulWidenEven(y Uint32x4) (z Uint64x2)
 
-// MulWidenEven multiplies even-indexed elements, widening the result.
-// Result[i] = v1[2*i] * v2[2*i].
+// MulWidenEven multiplies corresponding even-indexed elements of x and y,
+// returning a vector of half as many elements, each with twice the input
+// element size.
+//
+//	z[i] = uint64(x[2*i]) * uint64(y[2*i])
+//
+// The doubled element width is sufficient to hold every product without
+// overflow.
 //
 // Asm: VPMULUDQ, CPU Feature: AVX2
-func (x Uint32x8) MulWidenEven(y Uint32x8) Uint64x4
+func (x Uint32x8) MulWidenEven(y Uint32x8) (z Uint64x4)
 
 /* NotEqual */
 
@@ -8080,12 +8336,16 @@ func (x Uint64x8) SetHi(y Uint64x4) (z Uint64x8)
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 8
 //
+// See also [Enlarge].
+//
 // Asm: VINSERTF128, CPU Feature: AVX
 func (x Float32x8) SetLo(y Float32x4) (z Float32x8)
 
 // SetLo returns x with its lower half set to y.
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 16
+//
+// See also [Enlarge].
 //
 // Asm: VINSERTF64X4, CPU Feature: AVX512
 func (x Float32x16) SetLo(y Float32x8) (z Float32x16)
@@ -8094,12 +8354,16 @@ func (x Float32x16) SetLo(y Float32x8) (z Float32x16)
 //
 //	z = {y[0], y[1], x[2], x[3]}
 //
+// See also [Enlarge].
+//
 // Asm: VINSERTF128, CPU Feature: AVX
 func (x Float64x4) SetLo(y Float64x2) (z Float64x4)
 
 // SetLo returns x with its lower half set to y.
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 8
+//
+// See also [Enlarge].
 //
 // Asm: VINSERTF64X4, CPU Feature: AVX512
 func (x Float64x8) SetLo(y Float64x4) (z Float64x8)
@@ -8108,12 +8372,16 @@ func (x Float64x8) SetLo(y Float64x4) (z Float64x8)
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 32
 //
+// See also [Enlarge].
+//
 // Asm: VINSERTI128, CPU Feature: AVX2
 func (x Int8x32) SetLo(y Int8x16) (z Int8x32)
 
 // SetLo returns x with its lower half set to y.
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 64
+//
+// See also [Enlarge].
 //
 // Asm: VINSERTI64X4, CPU Feature: AVX512
 func (x Int8x64) SetLo(y Int8x32) (z Int8x64)
@@ -8122,12 +8390,16 @@ func (x Int8x64) SetLo(y Int8x32) (z Int8x64)
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 16
 //
+// See also [Enlarge].
+//
 // Asm: VINSERTI128, CPU Feature: AVX2
 func (x Int16x16) SetLo(y Int16x8) (z Int16x16)
 
 // SetLo returns x with its lower half set to y.
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 32
+//
+// See also [Enlarge].
 //
 // Asm: VINSERTI64X4, CPU Feature: AVX512
 func (x Int16x32) SetLo(y Int16x16) (z Int16x32)
@@ -8136,12 +8408,16 @@ func (x Int16x32) SetLo(y Int16x16) (z Int16x32)
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 8
 //
+// See also [Enlarge].
+//
 // Asm: VINSERTI128, CPU Feature: AVX2
 func (x Int32x8) SetLo(y Int32x4) (z Int32x8)
 
 // SetLo returns x with its lower half set to y.
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 16
+//
+// See also [Enlarge].
 //
 // Asm: VINSERTI64X4, CPU Feature: AVX512
 func (x Int32x16) SetLo(y Int32x8) (z Int32x16)
@@ -8150,12 +8426,16 @@ func (x Int32x16) SetLo(y Int32x8) (z Int32x16)
 //
 //	z = {y[0], y[1], x[2], x[3]}
 //
+// See also [Enlarge].
+//
 // Asm: VINSERTI128, CPU Feature: AVX2
 func (x Int64x4) SetLo(y Int64x2) (z Int64x4)
 
 // SetLo returns x with its lower half set to y.
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 8
+//
+// See also [Enlarge].
 //
 // Asm: VINSERTI64X4, CPU Feature: AVX512
 func (x Int64x8) SetLo(y Int64x4) (z Int64x8)
@@ -8164,12 +8444,16 @@ func (x Int64x8) SetLo(y Int64x4) (z Int64x8)
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 32
 //
+// See also [Enlarge].
+//
 // Asm: VINSERTI128, CPU Feature: AVX2
 func (x Uint8x32) SetLo(y Uint8x16) (z Uint8x32)
 
 // SetLo returns x with its lower half set to y.
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 64
+//
+// See also [Enlarge].
 //
 // Asm: VINSERTI64X4, CPU Feature: AVX512
 func (x Uint8x64) SetLo(y Uint8x32) (z Uint8x64)
@@ -8178,12 +8462,16 @@ func (x Uint8x64) SetLo(y Uint8x32) (z Uint8x64)
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 16
 //
+// See also [Enlarge].
+//
 // Asm: VINSERTI128, CPU Feature: AVX2
 func (x Uint16x16) SetLo(y Uint16x8) (z Uint16x16)
 
 // SetLo returns x with its lower half set to y.
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 32
+//
+// See also [Enlarge].
 //
 // Asm: VINSERTI64X4, CPU Feature: AVX512
 func (x Uint16x32) SetLo(y Uint16x16) (z Uint16x32)
@@ -8192,12 +8480,16 @@ func (x Uint16x32) SetLo(y Uint16x16) (z Uint16x32)
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 8
 //
+// See also [Enlarge].
+//
 // Asm: VINSERTI128, CPU Feature: AVX2
 func (x Uint32x8) SetLo(y Uint32x4) (z Uint32x8)
 
 // SetLo returns x with its lower half set to y.
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 16
+//
+// See also [Enlarge].
 //
 // Asm: VINSERTI64X4, CPU Feature: AVX512
 func (x Uint32x16) SetLo(y Uint32x8) (z Uint32x16)
@@ -8206,12 +8498,16 @@ func (x Uint32x16) SetLo(y Uint32x8) (z Uint32x16)
 //
 //	z = {y[0], y[1], x[2], x[3]}
 //
+// See also [Enlarge].
+//
 // Asm: VINSERTI128, CPU Feature: AVX2
 func (x Uint64x4) SetLo(y Uint64x2) (z Uint64x4)
 
 // SetLo returns x with its lower half set to y.
 //
 //	z = {y[0], y[1], ..., y[n/2-1], x[n/2], ..., x[n-1]}, where n = 8
+//
+// See also [Enlarge].
 //
 // Asm: VINSERTI64X4, CPU Feature: AVX512
 func (x Uint64x8) SetLo(y Uint64x4) (z Uint64x8)
