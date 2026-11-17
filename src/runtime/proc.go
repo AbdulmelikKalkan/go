@@ -230,17 +230,17 @@ func main() {
 		}
 
 		if GOOS != "windows" {
-			if _cgo_thread_start == nil {
+			if _cgo_thread_start == nil && (!goexperiment.CgoBindings || cgoThreadStart == nil) {
 				throw("_cgo_thread_start missing")
 			}
-			if _cgo_setenv == nil {
+			if _cgo_setenv == nil && (!goexperiment.CgoBindings || cgoSetenv == nil) {
 				throw("_cgo_setenv missing")
 			}
-			if _cgo_unsetenv == nil {
+			if _cgo_unsetenv == nil && (!goexperiment.CgoBindings || cgoUnsetenv == nil) {
 				throw("_cgo_unsetenv missing")
 			}
 		}
-		if _cgo_notify_runtime_init_done == nil {
+		if _cgo_notify_runtime_init_done == nil && (!goexperiment.CgoBindings || cgoNotifyRuntimeInitDone == nil) {
 			throw("_cgo_notify_runtime_init_done missing")
 		}
 
@@ -253,7 +253,11 @@ func main() {
 		// Start the template thread in case we enter Go from
 		// a C-created thread and need to create a new thread.
 		startTemplateThread()
-		cgocall(_cgo_notify_runtime_init_done, nil)
+		if goexperiment.CgoBindings && cgoNotifyRuntimeInitDone != nil {
+			cgoNotifyRuntimeInitDone()
+		} else {
+			cgocall(_cgo_notify_runtime_init_done, nil)
+		}
 	}
 
 	// Run the initializing tasks. Depending on build mode this
@@ -1860,6 +1864,8 @@ func mStackIsSystemAllocated() bool {
 
 // mstart is the entry-point for new Ms.
 // It is written in assembly, uses ABI0, is marked TOPFRAME, and calls mstart0.
+//
+//go:linknamestd mstart
 func mstart()
 
 // mstart0 is the Go entry-point for new Ms.
@@ -2274,8 +2280,6 @@ func runSafePointFn() {
 // When running with cgo, we call _cgo_thread_start
 // to start threads for us so that we can play nicely with
 // foreign code.
-var cgoThreadStart unsafe.Pointer
-
 type cgothreadstart struct {
 	g   guintptr
 	tls *uint64
@@ -2502,7 +2506,7 @@ func needAndBindM() {
 	needm(false)
 
 	if _cgo_pthread_key_created != nil && *(*uintptr)(_cgo_pthread_key_created) != 0 {
-		cgoBindM()
+		bindm()
 	}
 }
 
@@ -2708,7 +2712,7 @@ func dropm() {
 //
 //go:nosplit
 //go:nowritebarrierrec
-func cgoBindM() {
+func bindm() {
 	if GOOS == "windows" || GOOS == "plan9" {
 		fatal("bindm in unexpected GOOS")
 	}
@@ -2716,7 +2720,9 @@ func cgoBindM() {
 	if g.m.g0 != g {
 		fatal("the current g is not g0")
 	}
-	if _cgo_bindm != nil {
+	if goexperiment.CgoBindings && cgoBindM != nil {
+		cgoBindM(uintptr(unsafe.Pointer(g)))
+	} else if _cgo_bindm != nil {
 		asmcgocall(_cgo_bindm, unsafe.Pointer(g))
 	}
 }
@@ -2924,21 +2930,35 @@ func newm(fn func(), pp *p, id int64) {
 }
 
 func newm1(mp *m) {
-	if iscgo && _cgo_thread_start != nil {
-		var ts cgothreadstart
-		ts.g.set(mp.g0)
-		ts.tls = (*uint64)(unsafe.Pointer(&mp.tls[0]))
-		ts.fn = unsafe.Pointer(abi.FuncPCABI0(mstart))
-		if msanenabled {
-			msanwrite(unsafe.Pointer(&ts), unsafe.Sizeof(ts))
+	if iscgo {
+		if goexperiment.CgoBindings && cgoThreadStart != nil {
+			execLock.rlock() // Prevent process clone.
+			systemstack(func() {
+				if errno, msg := cgoThreadStart(mp.g0); errno != 0 {
+					execLock.runlock()
+					print("runtime/cgo: ", msg, ": errno=", errno, "\n")
+					throw(msg)
+				}
+			})
+			execLock.runlock()
+			return
 		}
-		if asanenabled {
-			asanwrite(unsafe.Pointer(&ts), unsafe.Sizeof(ts))
+		if _cgo_thread_start != nil {
+			var ts cgothreadstart
+			ts.g.set(mp.g0)
+			ts.tls = (*uint64)(unsafe.Pointer(&mp.tls[0]))
+			ts.fn = unsafe.Pointer(abi.FuncPCABI0(mstart))
+			if msanenabled {
+				msanwrite(unsafe.Pointer(&ts), unsafe.Sizeof(ts))
+			}
+			if asanenabled {
+				asanwrite(unsafe.Pointer(&ts), unsafe.Sizeof(ts))
+			}
+			execLock.rlock() // Prevent process clone.
+			asmcgocall(_cgo_thread_start, unsafe.Pointer(&ts))
+			execLock.runlock()
+			return
 		}
-		execLock.rlock() // Prevent process clone.
-		asmcgocall(_cgo_thread_start, unsafe.Pointer(&ts))
-		execLock.runlock()
-		return
 	}
 	execLock.rlock() // Prevent process clone.
 	newosproc(mp)

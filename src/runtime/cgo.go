@@ -38,6 +38,30 @@ var (
 	_cgo_getstackbound            unsafe.Pointer
 )
 
+// Go equivalents of the _cgo_* C function pointers above, populated by
+// runtime/cgo on platforms where those entrypoints are implemented in Go.
+//
+// cgoGetStackBound must be called while pinned to the M (or on a system/C
+// stack) so pthread_self refers to a fixed OS thread.
+//
+//go:linknamestd cgoGetStackBound
+var cgoGetStackBound func() (lo, hi uintptr)
+
+//go:linknamestd cgoThreadStart
+var cgoThreadStart func(gp *g) (errno int32, msg string)
+
+//go:linknamestd cgoSysThreadCreate
+var cgoSysThreadCreate func(fn unsafe.Pointer) int32
+
+//go:linknamestd cgoNotifyRuntimeInitDone
+var cgoNotifyRuntimeInitDone func()
+
+//go:linknamestd cgoSetContextFunction
+var cgoSetContextFunction func(context uintptr)
+
+//go:linknamestd cgoBindM
+var cgoBindM func(g uintptr)
+
 // iscgo is set to true by the runtime/cgo package
 //
 // iscgo should be an internal detail,
@@ -100,4 +124,10 @@ func cgoNoCallback(v bool) {
 		panic("runtime: unexpected setting cgoNoCallback")
 	}
 	g.nocgocallback = v
+}
+
+//go:linknamestd cgoUsleep
+//go:nosplit
+func cgoUsleep(usec uint32) {
+	usleep_no_g(usec)
 }

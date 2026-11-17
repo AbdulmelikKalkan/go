@@ -6,6 +6,7 @@
 
 #include "go_asm.h"
 #include "textflag.h"
+#include "abi_amd64.h"
 
 // cgoCallTrampoline is called by runtime.asmcgocall (or runtime.cgocall)
 // using the System V AMD64 C ABI with DI pointing to a cgoCallFrame.
@@ -32,3 +33,72 @@ TEXT ·cgoCallTrampoline(SB),NOSPLIT|NOFRAME,$0-0
 	POPQ	BX
 	POPQ	BP
 	RET
+
+TEXT _cgo_wait_runtime_init_done(SB),NOSPLIT|NOFRAME,$0-0
+	// Use LEAQ to avoid clobbering R15 (callee-saved in the C ABI)
+	// when dynamic linking rewrites global accesses via the GOT.
+	LEAQ	·runtime_init_done(SB), AX
+	MOVL	(AX), AX
+	CMPL	AX, $2
+	JNE	slow
+	LEAQ	·cgo_context_function(SB), AX
+	MOVQ	(AX), AX
+	TESTQ	AX, AX
+	JNE	slow
+	RET
+slow:
+	PUSH_REGS_HOST_TO_ABI0()
+	ADJSP	$8
+	CALL	·cgoWaitRuntimeInitDone(SB)
+	MOVQ	0(SP), AX
+	ADJSP	$-8
+	POP_REGS_HOST_TO_ABI0()
+	RET
+
+TEXT _cgo_release_context(SB),NOSPLIT|NOFRAME,$0-0
+	TESTQ	DI, DI
+	JEQ	done
+	PUSH_REGS_HOST_TO_ABI0()
+	ADJSP	$8
+	MOVQ	DI, 0(SP)
+	CALL	·cgoReleaseContext(SB)
+	ADJSP	$-8
+	POP_REGS_HOST_TO_ABI0()
+done:
+	RET
+
+TEXT ·pthreadKeyDestructor(SB),NOSPLIT|NOFRAME,$0-0
+	MOVQ	DI, SI
+	XORL	DI, DI
+	XORL	CX, CX
+	JMP	crosscall2(SB)
+
+TEXT ·x_cgo_threadentry(SB),NOSPLIT|NOFRAME,$0-0
+	PUSH_REGS_HOST_TO_ABI0()
+	XORPS	X15, X15
+#ifndef GOAMD64_v3
+#ifndef GOAMD64_v4
+	CMPB	internal∕cpu·X86+const_offsetX86HasAVX(SB), $1
+	JNE	2(PC)
+#endif
+#endif
+	VXORPS	X15, X15, X15
+	XORQ	R14, R14
+	MOVQ	DI, AX
+	CALL	·threadentry<ABIInternal>(SB)
+	POP_REGS_HOST_TO_ABI0()
+	XORL	AX, AX
+	RET
+
+TEXT x_cgo_init<>(SB),NOSPLIT|NOFRAME,$0-0
+	PUSH_REGS_HOST_TO_ABI0()
+	ADJSP	$16
+	MOVQ	DI, 0(SP)
+	MOVQ	SI, 8(SP)
+	CALL	·cgoInit(SB)
+	ADJSP	$-16
+	POP_REGS_HOST_TO_ABI0()
+	RET
+
+GLOBL _cgo_init(SB), NOPTR, $8
+DATA _cgo_init+0(SB)/8, $x_cgo_init<>(SB)
