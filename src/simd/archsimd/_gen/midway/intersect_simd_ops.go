@@ -29,17 +29,10 @@ import (
 	"simd/archsimd/_gen/gentools"
 	"simd/archsimd/_gen/specdoc"
 	"simd/archsimd/_gen/specgen"
-
-	"gopkg.in/yaml.v3"
 )
 
 type MethodSet map[string]*ast.FuncDecl
 type TypeMethods map[string]MethodSet
-
-type Comments struct {
-	Types     map[string]string `yaml:"types"`
-	Functions map[string]string `yaml:"functions"`
-}
 
 var genFlags = gentools.RegisterFlags(nil)
 var verbose = flag.Bool("v", false, "Be much chattier about processing")
@@ -94,6 +87,29 @@ func combine(arch, typ string) string {
 	return arch + "-" + typ
 }
 
+// requiredCPUFeature returns the CPU feature that doc's implementation notes
+// say is required to call the documented method, or "" if there is none. This
+// is the "CPU Feature:" clause of a note like
+//
+//	Asm: VPADDD, CPU Feature: AVX
+//
+// A method that uses an instruction only if some further CPU feature is
+// available, and is emulated otherwise, names that feature in its "Asm:" clause
+// instead, like
+//
+//	Asm: VPCLMULQDQ if AVX2CLMUL, Emulated otherwise, CPU Feature: AVX2
+//
+// Such a method is safe to call without that further feature, so it doesn't
+// count as required.
+func requiredCPUFeature(doc string) string {
+	_, feature, ok := strings.Cut(doc, "CPU Feature:")
+	if !ok {
+		return ""
+	}
+	feature, _, _ = strings.Cut(feature, "\n")
+	return strings.TrimSpace(feature)
+}
+
 var files gentools.Files
 
 func main() {
@@ -111,15 +127,6 @@ func main() {
 	}))
 
 	defer files.FlushOrExit()
-
-	var comments Comments
-	commentsData, err := os.ReadFile("comments.yaml")
-	if err != nil {
-		log.Fatalf("Failed to read comments.yaml: %v", err)
-	}
-	if err := yaml.Unmarshal(commentsData, &comments); err != nil {
-		log.Fatalf("Failed to parse comments.yaml: %v", err)
-	}
 
 	pv := func(f string, s ...any) {
 		if *verbose {
@@ -314,14 +321,18 @@ func main() {
 						continue
 					}
 
+					// Skip methods that require a CPU feature beyond
+					// what the simd package requires to use vectors
+					// of this size.
+					feature := requiredCPUFeature(funcDecl.Doc.Text())
 					if sizeForType[recvType] == 128 {
-						if s := funcDecl.Doc.Text(); strings.Contains(s, "AVX512") || strings.Contains(s, "AVX2") {
+						if strings.Contains(feature, "AVX512") || strings.Contains(feature, "AVX2") {
 							pv("Skipping 128-bit %s.%s because AVX2/AVX512\n", recvType, methodName)
 							continue
 						}
 					}
 					if sizeForType[recvType] == 256 {
-						if s := funcDecl.Doc.Text(); strings.Contains(s, "AVX512") {
+						if strings.Contains(feature, "AVX512") {
 							pv("Skipping 256-bit %s.%s because AVX512\n", recvType, methodName)
 							continue
 						}
@@ -476,9 +487,6 @@ type _simd bridge.ZeroSized
 `)
 
 		for _, elem := range elems {
-			if c := comments.Types[elem+"s"]; c != "" {
-				pf("// %s\n", c)
-			}
 			pf("type %ss struct {\n\t_ _simd\n\t%s // the actual vector size may be larger.\n}\n", elem, emulatedLanes(elem))
 		}
 	}

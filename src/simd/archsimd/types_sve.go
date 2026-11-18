@@ -26,6 +26,9 @@ type v256 struct {
 
 // Float32s is a scalable SIMD vector of float32s.
 //
+// Values of type Float32s are comparable. a == b if a[i] == b[i] for all elements.
+// Like float32 scalars, NaN != NaN, and +0 == -0.
+//
 // CPU Feature: SVE
 type Float32s struct {
 	float32x8 v256
@@ -126,6 +129,9 @@ func (x Float32s) String() string {
 
 // Float64s is a scalable SIMD vector of float64s.
 //
+// Values of type Float64s are comparable. a == b if a[i] == b[i] for all elements.
+// Like float64 scalars, NaN != NaN, and +0 == -0.
+//
 // CPU Feature: SVE
 type Float64s struct {
 	float64x4 v256
@@ -225,6 +231,8 @@ func (x Float64s) String() string {
 }
 
 // Int8s is a scalable SIMD vector of int8s.
+//
+// Values of type Int8s are comparable. a == b if a[i] == b[i] for all elements.
 //
 // CPU Feature: SVE
 type Int8s struct {
@@ -335,6 +343,8 @@ func (x Int8s) String() string {
 
 // Int16s is a scalable SIMD vector of int16s.
 //
+// Values of type Int16s are comparable. a == b if a[i] == b[i] for all elements.
+//
 // CPU Feature: SVE
 type Int16s struct {
 	int16x16 v256
@@ -443,6 +453,8 @@ func (x Int16s) String() string {
 }
 
 // Int32s is a scalable SIMD vector of int32s.
+//
+// Values of type Int32s are comparable. a == b if a[i] == b[i] for all elements.
 //
 // CPU Feature: SVE
 type Int32s struct {
@@ -553,6 +565,8 @@ func (x Int32s) String() string {
 
 // Int64s is a scalable SIMD vector of int64s.
 //
+// Values of type Int64s are comparable. a == b if a[i] == b[i] for all elements.
+//
 // CPU Feature: SVE
 type Int64s struct {
 	int64x4 v256
@@ -662,6 +676,8 @@ func (x Int64s) String() string {
 
 // Uint8s is a scalable SIMD vector of uint8s.
 //
+// Values of type Uint8s are comparable. a == b if a[i] == b[i] for all elements.
+//
 // CPU Feature: SVE
 type Uint8s struct {
 	uint8x32 v256
@@ -761,6 +777,8 @@ func (x Uint8s) String() string {
 }
 
 // Uint16s is a scalable SIMD vector of uint16s.
+//
+// Values of type Uint16s are comparable. a == b if a[i] == b[i] for all elements.
 //
 // CPU Feature: SVE
 type Uint16s struct {
@@ -862,6 +880,8 @@ func (x Uint16s) String() string {
 
 // Uint32s is a scalable SIMD vector of uint32s.
 //
+// Values of type Uint32s are comparable. a == b if a[i] == b[i] for all elements.
+//
 // CPU Feature: SVE
 type Uint32s struct {
 	uint32x8 v256
@@ -962,6 +982,8 @@ func (x Uint32s) String() string {
 
 // Uint64s is a scalable SIMD vector of uint64s.
 //
+// Values of type Uint64s are comparable. a == b if a[i] == b[i] for all elements.
+//
 // CPU Feature: SVE
 type Uint64s struct {
 	uint64x4 v256
@@ -1060,12 +1082,13 @@ func (x Uint64s) String() string {
 	return simdfmt.SliceToString(s[:n])
 }
 
-// Mask8s is a scalable mask for a SIMD vector of 8-bit elements.
+// Mask8s is a mask for a scalable SIMD vector of 8-bit elements.
 //
-// An SVE predicate holds one bit per byte of the vector it governs, so a
+// Values of type Mask8s are comparable.
+//
+// Note: An SVE predicate holds one bit per byte of the vector it governs, so a
 // Mask8s carries one bit for each byte of the runtime vector length, and
 // lane i is governed by bit i.
-//
 // In memory a Mask8s is a uint64 holding those bits, bit 0 first; the bits
 // beyond the runtime vector length are zero. So the bits of m can be read with
 // *(*uint64)(unsafe.Pointer(&m)).
@@ -1081,12 +1104,14 @@ type Mask8s struct {
 // Asm: PWHILELT, CPU Feature: SVE
 func Mask8sAllTrue() (z Mask8s)
 
-// Mask8sFromCount returns a mask whose first count lanes are true and the
-// rest false. A count of 0 or less gives no true lanes, and a count of the
-// vector length or more gives all true lanes.
+// Mask8sFromCount returns a mask whose first count elements are true and the rest
+// false. A count of 0 or less gives no true elements, and a count of at least
+// the number of elements gives all true elements.
+//
+//	z[i] = i < count
 //
 // Asm: PWHILELT, CPU Feature: SVE
-func Mask8sFromCount(count int) Mask8s
+func Mask8sFromCount(count int) (z Mask8s)
 
 // First returns a mask with only the first active lane of x active, or no
 // lanes active if x has none.
@@ -1138,12 +1163,13 @@ func (x Mask8s) String() string {
 	return simdfmt.SliceToString(s[:n])
 }
 
-// Mask16s is a scalable mask for a SIMD vector of 16-bit elements.
+// Mask16s is a mask for a scalable SIMD vector of 16-bit elements.
 //
-// An SVE predicate holds one bit per byte of the vector it governs, so a
+// Values of type Mask16s are comparable.
+//
+// Note: An SVE predicate holds one bit per byte of the vector it governs, so a
 // Mask16s carries one bit for each byte of the runtime vector length, and
 // lane i is governed by bit 2*i. The bits in between are ignored.
-//
 // In memory a Mask16s is a uint64 holding those bits, bit 0 first; the bits
 // beyond the runtime vector length are zero. So the bits of m can be read with
 // *(*uint64)(unsafe.Pointer(&m)).
@@ -1159,12 +1185,14 @@ type Mask16s struct {
 // Asm: PWHILELT, CPU Feature: SVE
 func Mask16sAllTrue() (z Mask16s)
 
-// Mask16sFromCount returns a mask whose first count lanes are true and the
-// rest false. A count of 0 or less gives no true lanes, and a count of the
-// vector length or more gives all true lanes.
+// Mask16sFromCount returns a mask whose first count elements are true and the rest
+// false. A count of 0 or less gives no true elements, and a count of at least
+// the number of elements gives all true elements.
+//
+//	z[i] = i < count
 //
 // Asm: PWHILELT, CPU Feature: SVE
-func Mask16sFromCount(count int) Mask16s
+func Mask16sFromCount(count int) (z Mask16s)
 
 // First returns a mask with only the first active lane of x active, or no
 // lanes active if x has none.
@@ -1216,12 +1244,13 @@ func (x Mask16s) String() string {
 	return simdfmt.SliceToString(s[:n])
 }
 
-// Mask32s is a scalable mask for a SIMD vector of 32-bit elements.
+// Mask32s is a mask for a scalable SIMD vector of 32-bit elements.
 //
-// An SVE predicate holds one bit per byte of the vector it governs, so a
+// Values of type Mask32s are comparable.
+//
+// Note: An SVE predicate holds one bit per byte of the vector it governs, so a
 // Mask32s carries one bit for each byte of the runtime vector length, and
 // lane i is governed by bit 4*i. The bits in between are ignored.
-//
 // In memory a Mask32s is a uint64 holding those bits, bit 0 first; the bits
 // beyond the runtime vector length are zero. So the bits of m can be read with
 // *(*uint64)(unsafe.Pointer(&m)).
@@ -1237,12 +1266,14 @@ type Mask32s struct {
 // Asm: PWHILELT, CPU Feature: SVE
 func Mask32sAllTrue() (z Mask32s)
 
-// Mask32sFromCount returns a mask whose first count lanes are true and the
-// rest false. A count of 0 or less gives no true lanes, and a count of the
-// vector length or more gives all true lanes.
+// Mask32sFromCount returns a mask whose first count elements are true and the rest
+// false. A count of 0 or less gives no true elements, and a count of at least
+// the number of elements gives all true elements.
+//
+//	z[i] = i < count
 //
 // Asm: PWHILELT, CPU Feature: SVE
-func Mask32sFromCount(count int) Mask32s
+func Mask32sFromCount(count int) (z Mask32s)
 
 // First returns a mask with only the first active lane of x active, or no
 // lanes active if x has none.
@@ -1294,12 +1325,13 @@ func (x Mask32s) String() string {
 	return simdfmt.SliceToString(s[:n])
 }
 
-// Mask64s is a scalable mask for a SIMD vector of 64-bit elements.
+// Mask64s is a mask for a scalable SIMD vector of 64-bit elements.
 //
-// An SVE predicate holds one bit per byte of the vector it governs, so a
+// Values of type Mask64s are comparable.
+//
+// Note: An SVE predicate holds one bit per byte of the vector it governs, so a
 // Mask64s carries one bit for each byte of the runtime vector length, and
 // lane i is governed by bit 8*i. The bits in between are ignored.
-//
 // In memory a Mask64s is a uint64 holding those bits, bit 0 first; the bits
 // beyond the runtime vector length are zero. So the bits of m can be read with
 // *(*uint64)(unsafe.Pointer(&m)).
@@ -1315,12 +1347,14 @@ type Mask64s struct {
 // Asm: PWHILELT, CPU Feature: SVE
 func Mask64sAllTrue() (z Mask64s)
 
-// Mask64sFromCount returns a mask whose first count lanes are true and the
-// rest false. A count of 0 or less gives no true lanes, and a count of the
-// vector length or more gives all true lanes.
+// Mask64sFromCount returns a mask whose first count elements are true and the rest
+// false. A count of 0 or less gives no true elements, and a count of at least
+// the number of elements gives all true elements.
+//
+//	z[i] = i < count
 //
 // Asm: PWHILELT, CPU Feature: SVE
-func Mask64sFromCount(count int) Mask64s
+func Mask64sFromCount(count int) (z Mask64s)
 
 // First returns a mask with only the first active lane of x active, or no
 // lanes active if x has none.
