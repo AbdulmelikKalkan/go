@@ -10613,7 +10613,7 @@ func rewriteValue_OpARM64MNEGW(v *ssa.Value) bool {
 	}
 	// match: (MNEGW x (MOVDconst [c]))
 	// cond: ssa.IsPowerOfTwo(c)
-	// result: (NEG (SLLconst <x.Type> [ssa.Log64(c)] x))
+	// result: (MOVWUreg (NEG <x.Type> (SLLconst <x.Type> [ssa.Log64(c)] x)))
 	for {
 		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
 			x := v_0
@@ -10624,10 +10624,12 @@ func rewriteValue_OpARM64MNEGW(v *ssa.Value) bool {
 			if !(ssa.IsPowerOfTwo(c)) {
 				continue
 			}
-			v.Reset(ssaop.OpARM64NEG)
-			v0 := b.NewValue0(v.Pos, ssaop.OpARM64SLLconst, x.Type)
-			v0.AuxInt = ssa.Int64ToAuxInt(ssa.Log64(c))
-			v0.AddArg(x)
+			v.Reset(ssaop.OpARM64MOVWUreg)
+			v0 := b.NewValue0(v.Pos, ssaop.OpARM64NEG, x.Type)
+			v1 := b.NewValue0(v.Pos, ssaop.OpARM64SLLconst, x.Type)
+			v1.AuxInt = ssa.Int64ToAuxInt(ssa.Log64(c))
+			v1.AddArg(x)
+			v0.AddArg(v1)
 			v.AddArg(v0)
 			return true
 		}
@@ -31053,15 +31055,15 @@ func rewriteValue_OpMask16sFromCount(v *ssa.Value) bool {
 	}
 }
 func rewriteValue_OpMask16sNext(v *ssa.Value) bool {
+	v_1 := v.Args[1]
 	v_0 := v.Args[0]
-	b := v.Block
-	// match: (Mask16sNext m)
-	// result: (PPNEXTH m (Mask16sAllTrue <types.TypeMask>))
+	// match: (Mask16sNext m cursor)
+	// result: (PPNEXTH cursor m)
 	for {
 		m := v_0
+		cursor := v_1
 		v.Reset(ssaop.OpARM64PPNEXTH)
-		v0 := b.NewValue0(v.Pos, ssaop.OpMask16sAllTrue, types.TypeMask)
-		v.AddArg2(m, v0)
+		v.AddArg2(cursor, m)
 		return true
 	}
 }
@@ -31164,15 +31166,15 @@ func rewriteValue_OpMask32sFromCount(v *ssa.Value) bool {
 	}
 }
 func rewriteValue_OpMask32sNext(v *ssa.Value) bool {
+	v_1 := v.Args[1]
 	v_0 := v.Args[0]
-	b := v.Block
-	// match: (Mask32sNext m)
-	// result: (PPNEXTS m (Mask32sAllTrue <types.TypeMask>))
+	// match: (Mask32sNext m cursor)
+	// result: (PPNEXTS cursor m)
 	for {
 		m := v_0
+		cursor := v_1
 		v.Reset(ssaop.OpARM64PPNEXTS)
-		v0 := b.NewValue0(v.Pos, ssaop.OpMask32sAllTrue, types.TypeMask)
-		v.AddArg2(m, v0)
+		v.AddArg2(cursor, m)
 		return true
 	}
 }
@@ -31275,15 +31277,15 @@ func rewriteValue_OpMask64sFromCount(v *ssa.Value) bool {
 	}
 }
 func rewriteValue_OpMask64sNext(v *ssa.Value) bool {
+	v_1 := v.Args[1]
 	v_0 := v.Args[0]
-	b := v.Block
-	// match: (Mask64sNext m)
-	// result: (PPNEXTD m (Mask64sAllTrue <types.TypeMask>))
+	// match: (Mask64sNext m cursor)
+	// result: (PPNEXTD cursor m)
 	for {
 		m := v_0
+		cursor := v_1
 		v.Reset(ssaop.OpARM64PPNEXTD)
-		v0 := b.NewValue0(v.Pos, ssaop.OpMask64sAllTrue, types.TypeMask)
-		v.AddArg2(m, v0)
+		v.AddArg2(cursor, m)
 		return true
 	}
 }
@@ -31386,15 +31388,15 @@ func rewriteValue_OpMask8sFromCount(v *ssa.Value) bool {
 	}
 }
 func rewriteValue_OpMask8sNext(v *ssa.Value) bool {
+	v_1 := v.Args[1]
 	v_0 := v.Args[0]
-	b := v.Block
-	// match: (Mask8sNext m)
-	// result: (PPNEXTB m (Mask8sAllTrue <types.TypeMask>))
+	// match: (Mask8sNext m cursor)
+	// result: (PPNEXTB cursor m)
 	for {
 		m := v_0
+		cursor := v_1
 		v.Reset(ssaop.OpARM64PPNEXTB)
-		v0 := b.NewValue0(v.Pos, ssaop.OpMask8sAllTrue, types.TypeMask)
-		v.AddArg2(m, v0)
+		v.AddArg2(cursor, m)
 		return true
 	}
 }
