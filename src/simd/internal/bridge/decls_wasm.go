@@ -756,6 +756,10 @@ func (x Uint8x16) LessEqual(y Uint8x16) Mask8x16 {
 	return Mask8x16((archsimd.Uint8x16(x)).LessEqual(archsimd.Uint8x16(y)))
 }
 
+func (x Uint8x16) LookupOrZero(indices Uint8x16) Uint8x16 {
+	return Uint8x16((archsimd.Uint8x16(x)).LookupOrZero(archsimd.Uint8x16(indices)))
+}
+
 func (x Uint8x16) Masked(mask Mask8x16) Uint8x16 {
 	return Uint8x16((archsimd.Uint8x16(x)).Masked(archsimd.Mask8x16(mask)))
 }
@@ -1152,20 +1156,20 @@ func (x Uint64x2) BitsToInt64() Int64x2 {
 	return Int64x2((archsimd.Uint64x2(x)).BitsToInt64())
 }
 
-func (x Uint64x2) CarrylessMultiplyEven(y Uint64x2) Uint64x2 {
-	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMultiplyEven(archsimd.Uint64x2(y)))
+func (x Uint64x2) CarrylessMulEven(y Uint64x2) Uint64x2 {
+	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMulEven(archsimd.Uint64x2(y)))
 }
 
-func (x Uint64x2) CarrylessMultiplyEvenOdd(y Uint64x2) Uint64x2 {
-	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMultiplyEvenOdd(archsimd.Uint64x2(y)))
+func (x Uint64x2) CarrylessMulEvenOdd(y Uint64x2) Uint64x2 {
+	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMulEvenOdd(archsimd.Uint64x2(y)))
 }
 
-func (x Uint64x2) CarrylessMultiplyOdd(y Uint64x2) Uint64x2 {
-	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMultiplyOdd(archsimd.Uint64x2(y)))
+func (x Uint64x2) CarrylessMulOdd(y Uint64x2) Uint64x2 {
+	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMulOdd(archsimd.Uint64x2(y)))
 }
 
-func (x Uint64x2) CarrylessMultiplyOddEven(y Uint64x2) Uint64x2 {
-	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMultiplyOddEven(archsimd.Uint64x2(y)))
+func (x Uint64x2) CarrylessMulOddEven(y Uint64x2) Uint64x2 {
+	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMulOddEven(archsimd.Uint64x2(y)))
 }
 
 func (x Uint64x2) ConvertToInt64() Int64x2 {

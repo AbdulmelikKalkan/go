@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build goexperiment.simd && (arm64 || wasm)
+//go:build goexperiment.simd && wasm
 
 package archsimd
 
@@ -36,10 +36,10 @@ func (x Uint64x2) mwl(y Uint64x2) Uint64x2 {
 	// across lanes) are lost.
 	ab__ := x.ReshapeToUint32s()
 	cd__ := y.ReshapeToUint32s()
-	ac0_ac1_bd0_bd1 := ab__.MulWidenLo(cd__)
+	ac0_ac1_bd0_bd1 := ab__.MulWiden(cd__)
 
 	dc__ := y.RotateAllLeft(32).ReshapeToUint32s()
-	ad0_ad1_bc0_bc1 := ab__.MulWidenLo(dc__)
+	ad0_ad1_bc0_bc1 := ab__.MulWiden(dc__)
 	//
 	// have        ad0, ad1, bc0, bc1
 	// want        0, ad0+bc0, ad1+bc1, 0
@@ -47,7 +47,7 @@ func (x Uint64x2) mwl(y Uint64x2) Uint64x2 {
 	//
 	// swap 64-bit halves of ad0_ad1_bc0_bc1
 	// to get   bc0_bc1_ad0_ad1
-	bc0_bc1_ad0_ad1 := Uint64x2{}.SetElem(0, ad0_ad1_bc0_bc1.GetElem(1)).SetElem(1, ad0_ad1_bc0_bc1.GetElem(0))
+	bc0_bc1_ad0_ad1 := Uint64x2{}.SetElem(0, ad0_ad1_bc0_bc1.Elem(1)).SetElem(1, ad0_ad1_bc0_bc1.Elem(0))
 
 	// added to ad0_ad1_bc0_bc1 yields
 	//   bc0+ad0, bc1+ad1, bc0+ad0, bc1+ad1

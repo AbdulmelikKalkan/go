@@ -667,52 +667,148 @@ func (x Float64x2) Div(y Float64x2) (z Float64x2)
 // Asm: I32x4DotI16x8S
 func (x Int16x8) DotProductPairs(y Int16x8) (z Int32x4)
 
+// Elem returns the i'th element x. If i >= 16, it panics.
+//
+//	z = x[i]
+//
+// Asm: I8x16ExtractLaneS
+func (x Int8x16) Elem(i uint8) (z int8)
+
+// Elem returns the i'th element x. If i >= 16, it panics.
+//
+//	z = x[i]
+//
+// Asm: I8x16ExtractLaneU
+func (x Uint8x16) Elem(i uint8) (z uint8)
+
+// Elem returns the i'th element x. If i >= 8, it panics.
+//
+//	z = x[i]
+//
+// Asm: I16x8ExtractLaneS
+func (x Int16x8) Elem(i uint8) (z int16)
+
+// Elem returns the i'th element x. If i >= 8, it panics.
+//
+//	z = x[i]
+//
+// Asm: I16x8ExtractLaneU
+func (x Uint16x8) Elem(i uint8) (z uint16)
+
+// Elem returns the i'th element x. If i >= 4, it panics.
+//
+//	z = x[i]
+//
+// Asm: I32x4ExtractLane
+func (x Int32x4) Elem(i uint8) (z int32)
+
+// Elem returns the i'th element x. If i >= 4, it panics.
+//
+//	z = x[i]
+//
+// Asm: I32x4ExtractLane
+func (x Uint32x4) Elem(i uint8) (z uint32)
+
+// Elem returns the i'th element x. If i >= 4, it panics.
+//
+//	z = x[i]
+//
+// Asm: F32x4ExtractLane
+func (x Float32x4) Elem(i uint8) (z float32)
+
+// Elem returns the i'th element x. If i >= 2, it panics.
+//
+//	z = x[i]
+//
+// Asm: I64x2ExtractLane
+func (x Int64x2) Elem(i uint8) (z int64)
+
+// Elem returns the i'th element x. If i >= 2, it panics.
+//
+//	z = x[i]
+//
+// Asm: I64x2ExtractLane
+func (x Uint64x2) Elem(i uint8) (z uint64)
+
+// Elem returns the i'th element x. If i >= 2, it panics.
+//
+//	z = x[i]
+//
+// Asm: F64x2ExtractLane
+func (x Float64x2) Elem(i uint8) (z float64)
+
 // Equal returns a mask indicating which elements of x and y are equal.
+//
+//	z[i] = x[i] == y[i]
 //
 // Asm: I8x16Eq
 func (x Int8x16) Equal(y Int8x16) (z Mask8x16)
 
 // Equal returns a mask indicating which elements of x and y are equal.
 //
+//	z[i] = x[i] == y[i]
+//
 // Asm: I8x16Eq
 func (x Uint8x16) Equal(y Uint8x16) (z Mask8x16)
 
 // Equal returns a mask indicating which elements of x and y are equal.
+//
+//	z[i] = x[i] == y[i]
 //
 // Asm: I16x8Eq
 func (x Int16x8) Equal(y Int16x8) (z Mask16x8)
 
 // Equal returns a mask indicating which elements of x and y are equal.
 //
+//	z[i] = x[i] == y[i]
+//
 // Asm: I16x8Eq
 func (x Uint16x8) Equal(y Uint16x8) (z Mask16x8)
 
 // Equal returns a mask indicating which elements of x and y are equal.
+//
+//	z[i] = x[i] == y[i]
 //
 // Asm: I32x4Eq
 func (x Int32x4) Equal(y Int32x4) (z Mask32x4)
 
 // Equal returns a mask indicating which elements of x and y are equal.
 //
+//	z[i] = x[i] == y[i]
+//
 // Asm: I32x4Eq
 func (x Uint32x4) Equal(y Uint32x4) (z Mask32x4)
 
 // Equal returns a mask indicating which elements of x and y are equal.
+//
+//	z[i] = x[i] == y[i]
+//
+// Like Go's == operator on floating-point values, this follows IEEE 754: the
+// result is false if either element is NaN, and +0 equals -0.
 //
 // Asm: F32x4Eq
 func (x Float32x4) Equal(y Float32x4) (z Mask32x4)
 
 // Equal returns a mask indicating which elements of x and y are equal.
 //
+//	z[i] = x[i] == y[i]
+//
 // Asm: I64x2Eq
 func (x Int64x2) Equal(y Int64x2) (z Mask64x2)
 
 // Equal returns a mask indicating which elements of x and y are equal.
 //
+//	z[i] = x[i] == y[i]
+//
 // Asm: I64x2Eq
 func (x Uint64x2) Equal(y Uint64x2) (z Mask64x2)
 
 // Equal returns a mask indicating which elements of x and y are equal.
+//
+//	z[i] = x[i] == y[i]
+//
+// Like Go's == operator on floating-point values, this follows IEEE 754: the
+// result is false if either element is NaN, and +0 equals -0.
 //
 // Asm: F64x2Eq
 func (x Float64x2) Equal(y Float64x2) (z Mask64x2)
@@ -799,76 +895,6 @@ func (x Float32x4) Floor() (z Float32x4)
 // Asm: F64x2Floor
 func (x Float64x2) Floor() (z Float64x2)
 
-// GetElem returns the i'th element x. If i >= 16, it panics.
-//
-//	z = x[i]
-//
-// Asm: I8x16ExtractLaneS
-func (x Int8x16) GetElem(i uint8) (z int8)
-
-// GetElem returns the i'th element x. If i >= 16, it panics.
-//
-//	z = x[i]
-//
-// Asm: I8x16ExtractLaneU
-func (x Uint8x16) GetElem(i uint8) (z uint8)
-
-// GetElem returns the i'th element x. If i >= 8, it panics.
-//
-//	z = x[i]
-//
-// Asm: I16x8ExtractLaneS
-func (x Int16x8) GetElem(i uint8) (z int16)
-
-// GetElem returns the i'th element x. If i >= 8, it panics.
-//
-//	z = x[i]
-//
-// Asm: I16x8ExtractLaneU
-func (x Uint16x8) GetElem(i uint8) (z uint16)
-
-// GetElem returns the i'th element x. If i >= 4, it panics.
-//
-//	z = x[i]
-//
-// Asm: I32x4ExtractLane
-func (x Int32x4) GetElem(i uint8) (z int32)
-
-// GetElem returns the i'th element x. If i >= 4, it panics.
-//
-//	z = x[i]
-//
-// Asm: I32x4ExtractLane
-func (x Uint32x4) GetElem(i uint8) (z uint32)
-
-// GetElem returns the i'th element x. If i >= 4, it panics.
-//
-//	z = x[i]
-//
-// Asm: F32x4ExtractLane
-func (x Float32x4) GetElem(i uint8) (z float32)
-
-// GetElem returns the i'th element x. If i >= 2, it panics.
-//
-//	z = x[i]
-//
-// Asm: I64x2ExtractLane
-func (x Int64x2) GetElem(i uint8) (z int64)
-
-// GetElem returns the i'th element x. If i >= 2, it panics.
-//
-//	z = x[i]
-//
-// Asm: I64x2ExtractLane
-func (x Uint64x2) GetElem(i uint8) (z uint64)
-
-// GetElem returns the i'th element x. If i >= 2, it panics.
-//
-//	z = x[i]
-//
-// Asm: F64x2ExtractLane
-func (x Float64x2) GetElem(i uint8) (z float64)
-
 // Greater returns a mask indicating which elements of x are greater than y.
 //
 //	z[i] = x[i] > y[i]
@@ -915,6 +941,9 @@ func (x Uint32x4) Greater(y Uint32x4) (z Mask32x4)
 //
 //	z[i] = x[i] > y[i]
 //
+// Like Go's > operator on floating-point values, this follows IEEE 754: the
+// result is false if either element is NaN, and +0 equals -0.
+//
 // Asm: F32x4Gt
 func (x Float32x4) Greater(y Float32x4) (z Mask32x4)
 
@@ -928,6 +957,9 @@ func (x Int64x2) Greater(y Int64x2) (z Mask64x2)
 // Greater returns a mask indicating which elements of x are greater than y.
 //
 //	z[i] = x[i] > y[i]
+//
+// Like Go's > operator on floating-point values, this follows IEEE 754: the
+// result is false if either element is NaN, and +0 equals -0.
 //
 // Asm: F64x2Gt
 func (x Float64x2) Greater(y Float64x2) (z Mask64x2)
@@ -985,6 +1017,9 @@ func (x Uint32x4) GreaterEqual(y Uint32x4) (z Mask32x4)
 //
 //	z[i] = x[i] >= y[i]
 //
+// Like Go's >= operator on floating-point values, this follows IEEE 754: the
+// result is false if either element is NaN, and +0 equals -0.
+//
 // Asm: F32x4Ge
 func (x Float32x4) GreaterEqual(y Float32x4) (z Mask32x4)
 
@@ -1000,6 +1035,9 @@ func (x Int64x2) GreaterEqual(y Int64x2) (z Mask64x2)
 // or equal to y.
 //
 //	z[i] = x[i] >= y[i]
+//
+// Like Go's >= operator on floating-point values, this follows IEEE 754: the
+// result is false if either element is NaN, and +0 equals -0.
 //
 // Asm: F64x2Ge
 func (x Float64x2) GreaterEqual(y Float64x2) (z Mask64x2)
@@ -1162,6 +1200,9 @@ func (x Uint32x4) Less(y Uint32x4) (z Mask32x4)
 //
 //	z[i] = x[i] < y[i]
 //
+// Like Go's < operator on floating-point values, this follows IEEE 754: the
+// result is false if either element is NaN, and +0 equals -0.
+//
 // Asm: F32x4Lt
 func (x Float32x4) Less(y Float32x4) (z Mask32x4)
 
@@ -1175,6 +1216,9 @@ func (x Int64x2) Less(y Int64x2) (z Mask64x2)
 // Less returns a mask indicating which elements of x are less than y.
 //
 //	z[i] = x[i] < y[i]
+//
+// Like Go's < operator on floating-point values, this follows IEEE 754: the
+// result is false if either element is NaN, and +0 equals -0.
 //
 // Asm: F64x2Lt
 func (x Float64x2) Less(y Float64x2) (z Mask64x2)
@@ -1232,6 +1276,9 @@ func (x Uint32x4) LessEqual(y Uint32x4) (z Mask32x4)
 //
 //	z[i] = x[i] <= y[i]
 //
+// Like Go's <= operator on floating-point values, this follows IEEE 754: the
+// result is false if either element is NaN, and +0 equals -0.
+//
 // Asm: F32x4Le
 func (x Float32x4) LessEqual(y Float32x4) (z Mask32x4)
 
@@ -1248,6 +1295,9 @@ func (x Int64x2) LessEqual(y Int64x2) (z Mask64x2)
 //
 //	z[i] = x[i] <= y[i]
 //
+// Like Go's <= operator on floating-point values, this follows IEEE 754: the
+// result is false if either element is NaN, and +0 equals -0.
+//
 // Asm: F64x2Le
 func (x Float64x2) LessEqual(y Float64x2) (z Mask64x2)
 
@@ -1261,6 +1311,17 @@ func (x Float64x2) LessEqual(y Float64x2) (z Mask64x2)
 //
 // Asm: I8x16Swizzle
 func (x Int8x16) LookupOrZero(indices Uint8x16) (z Int8x16)
+
+// LookupOrZero permutes x, returning 0 for out-of-range indices.
+//
+//	if indices[i] < 16 {
+//	    z[i] = x[indices[i]]
+//	} else {
+//	    z[i] = 0
+//	}
+//
+// Asm: I8x16Swizzle
+func (x Uint8x16) LookupOrZero(indices Uint8x16) (z Uint8x16)
 
 // Max returns the elementwise maximum of x and y.
 //
@@ -1494,79 +1555,7 @@ func (x Uint64x2) Mul(y Uint64x2) (z Uint64x2)
 // Asm: F64x2Mul
 func (x Float64x2) Mul(y Float64x2) (z Float64x2)
 
-// MulWidenHi multiplies corresponding elements in the upper half of x and y,
-// returning a vector of half as many elements, each with twice the input
-// element size.
-//
-//	z[i] = int16(x[8+i]) * int16(y[8+i])
-//
-// The doubled element width is sufficient to hold every product without
-// overflow.
-//
-// Asm: I16x8ExtmulHighI8x16S
-func (x Int8x16) MulWidenHi(y Int8x16) (z Int16x8)
-
-// MulWidenHi multiplies corresponding elements in the upper half of x and y,
-// returning a vector of half as many elements, each with twice the input
-// element size.
-//
-//	z[i] = uint16(x[8+i]) * uint16(y[8+i])
-//
-// The doubled element width is sufficient to hold every product without
-// overflow.
-//
-// Asm: I16x8ExtmulHighI8x16U
-func (x Uint8x16) MulWidenHi(y Uint8x16) (z Uint16x8)
-
-// MulWidenHi multiplies corresponding elements in the upper half of x and y,
-// returning a vector of half as many elements, each with twice the input
-// element size.
-//
-//	z[i] = int32(x[4+i]) * int32(y[4+i])
-//
-// The doubled element width is sufficient to hold every product without
-// overflow.
-//
-// Asm: I32x4ExtmulHighI16x8S
-func (x Int16x8) MulWidenHi(y Int16x8) (z Int32x4)
-
-// MulWidenHi multiplies corresponding elements in the upper half of x and y,
-// returning a vector of half as many elements, each with twice the input
-// element size.
-//
-//	z[i] = uint32(x[4+i]) * uint32(y[4+i])
-//
-// The doubled element width is sufficient to hold every product without
-// overflow.
-//
-// Asm: I32x4ExtmulHighI16x8U
-func (x Uint16x8) MulWidenHi(y Uint16x8) (z Uint32x4)
-
-// MulWidenHi multiplies corresponding elements in the upper half of x and y,
-// returning a vector of half as many elements, each with twice the input
-// element size.
-//
-//	z[i] = int64(x[2+i]) * int64(y[2+i])
-//
-// The doubled element width is sufficient to hold every product without
-// overflow.
-//
-// Asm: I64x2ExtmulHighI32x4S
-func (x Int32x4) MulWidenHi(y Int32x4) (z Int64x2)
-
-// MulWidenHi multiplies corresponding elements in the upper half of x and y,
-// returning a vector of half as many elements, each with twice the input
-// element size.
-//
-//	z[i] = uint64(x[2+i]) * uint64(y[2+i])
-//
-// The doubled element width is sufficient to hold every product without
-// overflow.
-//
-// Asm: I64x2ExtmulHighI32x4U
-func (x Uint32x4) MulWidenHi(y Uint32x4) (z Uint64x2)
-
-// MulWidenLo multiplies corresponding elements in the lower half of x and y,
+// MulWiden multiplies corresponding elements in the lower half of x and y,
 // returning a vector of half as many elements, each with twice the input
 // element size.
 //
@@ -1576,9 +1565,9 @@ func (x Uint32x4) MulWidenHi(y Uint32x4) (z Uint64x2)
 // overflow.
 //
 // Asm: I16x8ExtmulLowI8x16S
-func (x Int8x16) MulWidenLo(y Int8x16) (z Int16x8)
+func (x Int8x16) MulWiden(y Int8x16) (z Int16x8)
 
-// MulWidenLo multiplies corresponding elements in the lower half of x and y,
+// MulWiden multiplies corresponding elements in the lower half of x and y,
 // returning a vector of half as many elements, each with twice the input
 // element size.
 //
@@ -1588,9 +1577,9 @@ func (x Int8x16) MulWidenLo(y Int8x16) (z Int16x8)
 // overflow.
 //
 // Asm: I16x8ExtmulLowI8x16U
-func (x Uint8x16) MulWidenLo(y Uint8x16) (z Uint16x8)
+func (x Uint8x16) MulWiden(y Uint8x16) (z Uint16x8)
 
-// MulWidenLo multiplies corresponding elements in the lower half of x and y,
+// MulWiden multiplies corresponding elements in the lower half of x and y,
 // returning a vector of half as many elements, each with twice the input
 // element size.
 //
@@ -1600,9 +1589,9 @@ func (x Uint8x16) MulWidenLo(y Uint8x16) (z Uint16x8)
 // overflow.
 //
 // Asm: I32x4ExtmulLowI16x8S
-func (x Int16x8) MulWidenLo(y Int16x8) (z Int32x4)
+func (x Int16x8) MulWiden(y Int16x8) (z Int32x4)
 
-// MulWidenLo multiplies corresponding elements in the lower half of x and y,
+// MulWiden multiplies corresponding elements in the lower half of x and y,
 // returning a vector of half as many elements, each with twice the input
 // element size.
 //
@@ -1612,9 +1601,9 @@ func (x Int16x8) MulWidenLo(y Int16x8) (z Int32x4)
 // overflow.
 //
 // Asm: I32x4ExtmulLowI16x8U
-func (x Uint16x8) MulWidenLo(y Uint16x8) (z Uint32x4)
+func (x Uint16x8) MulWiden(y Uint16x8) (z Uint32x4)
 
-// MulWidenLo multiplies corresponding elements in the lower half of x and y,
+// MulWiden multiplies corresponding elements in the lower half of x and y,
 // returning a vector of half as many elements, each with twice the input
 // element size.
 //
@@ -1624,9 +1613,9 @@ func (x Uint16x8) MulWidenLo(y Uint16x8) (z Uint32x4)
 // overflow.
 //
 // Asm: I64x2ExtmulLowI32x4S
-func (x Int32x4) MulWidenLo(y Int32x4) (z Int64x2)
+func (x Int32x4) MulWiden(y Int32x4) (z Int64x2)
 
-// MulWidenLo multiplies corresponding elements in the lower half of x and y,
+// MulWiden multiplies corresponding elements in the lower half of x and y,
 // returning a vector of half as many elements, each with twice the input
 // element size.
 //
@@ -1636,7 +1625,7 @@ func (x Int32x4) MulWidenLo(y Int32x4) (z Int64x2)
 // overflow.
 //
 // Asm: I64x2ExtmulLowI32x4U
-func (x Uint32x4) MulWidenLo(y Uint32x4) (z Uint64x2)
+func (x Uint32x4) MulWiden(y Uint32x4) (z Uint64x2)
 
 // Neg returns the elementwise negation of x.
 //
@@ -1766,50 +1755,76 @@ func (x Mask64x2) Not() (z Mask64x2)
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
 //
+//	z[i] = x[i] != y[i]
+//
 // Asm: I8x16Ne
 func (x Int8x16) NotEqual(y Int8x16) (z Mask8x16)
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
+//
+//	z[i] = x[i] != y[i]
 //
 // Asm: I8x16Ne
 func (x Uint8x16) NotEqual(y Uint8x16) (z Mask8x16)
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
 //
+//	z[i] = x[i] != y[i]
+//
 // Asm: I16x8Ne
 func (x Int16x8) NotEqual(y Int16x8) (z Mask16x8)
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
+//
+//	z[i] = x[i] != y[i]
 //
 // Asm: I16x8Ne
 func (x Uint16x8) NotEqual(y Uint16x8) (z Mask16x8)
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
 //
+//	z[i] = x[i] != y[i]
+//
 // Asm: I32x4Ne
 func (x Int32x4) NotEqual(y Int32x4) (z Mask32x4)
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
+//
+//	z[i] = x[i] != y[i]
 //
 // Asm: I32x4Ne
 func (x Uint32x4) NotEqual(y Uint32x4) (z Mask32x4)
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
 //
+//	z[i] = x[i] != y[i]
+//
+// Like Go's != operator on floating-point values, this follows IEEE 754: the
+// result is true if either element is NaN, and +0 equals -0.
+//
 // Asm: F32x4Ne
 func (x Float32x4) NotEqual(y Float32x4) (z Mask32x4)
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
+//
+//	z[i] = x[i] != y[i]
 //
 // Asm: I64x2Ne
 func (x Int64x2) NotEqual(y Int64x2) (z Mask64x2)
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
 //
+//	z[i] = x[i] != y[i]
+//
 // Asm: I64x2Ne
 func (x Uint64x2) NotEqual(y Uint64x2) (z Mask64x2)
 
 // NotEqual returns a mask indicating which elements of x and y are not equal.
+//
+//	z[i] = x[i] != y[i]
+//
+// Like Go's != operator on floating-point values, this follows IEEE 754: the
+// result is true if either element is NaN, and +0 equals -0.
 //
 // Asm: F64x2Ne
 func (x Float64x2) NotEqual(y Float64x2) (z Mask64x2)
@@ -2067,7 +2082,8 @@ func (x Uint64x2) SetElem(i uint8, y uint64) (z Uint64x2)
 func (x Float64x2) SetElem(i uint8, y float64) (z Float64x2)
 
 // ShiftAllLeft shifts each element of x left by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] << shift
 //
@@ -2075,7 +2091,8 @@ func (x Float64x2) SetElem(i uint8, y float64) (z Float64x2)
 func (x Int8x16) ShiftAllLeft(shift uint64) (z Int8x16)
 
 // ShiftAllLeft shifts each element of x left by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] << shift
 //
@@ -2083,7 +2100,8 @@ func (x Int8x16) ShiftAllLeft(shift uint64) (z Int8x16)
 func (x Uint8x16) ShiftAllLeft(shift uint64) (z Uint8x16)
 
 // ShiftAllLeft shifts each element of x left by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] << shift
 //
@@ -2091,7 +2109,8 @@ func (x Uint8x16) ShiftAllLeft(shift uint64) (z Uint8x16)
 func (x Int16x8) ShiftAllLeft(shift uint64) (z Int16x8)
 
 // ShiftAllLeft shifts each element of x left by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] << shift
 //
@@ -2099,7 +2118,8 @@ func (x Int16x8) ShiftAllLeft(shift uint64) (z Int16x8)
 func (x Uint16x8) ShiftAllLeft(shift uint64) (z Uint16x8)
 
 // ShiftAllLeft shifts each element of x left by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] << shift
 //
@@ -2107,7 +2127,8 @@ func (x Uint16x8) ShiftAllLeft(shift uint64) (z Uint16x8)
 func (x Int32x4) ShiftAllLeft(shift uint64) (z Int32x4)
 
 // ShiftAllLeft shifts each element of x left by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] << shift
 //
@@ -2115,7 +2136,8 @@ func (x Int32x4) ShiftAllLeft(shift uint64) (z Int32x4)
 func (x Uint32x4) ShiftAllLeft(shift uint64) (z Uint32x4)
 
 // ShiftAllLeft shifts each element of x left by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] << shift
 //
@@ -2123,7 +2145,8 @@ func (x Uint32x4) ShiftAllLeft(shift uint64) (z Uint32x4)
 func (x Int64x2) ShiftAllLeft(shift uint64) (z Int64x2)
 
 // ShiftAllLeft shifts each element of x left by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] << shift
 //
@@ -2131,7 +2154,8 @@ func (x Int64x2) ShiftAllLeft(shift uint64) (z Int64x2)
 func (x Uint64x2) ShiftAllLeft(shift uint64) (z Uint64x2)
 
 // ShiftAllRight arithmetically shifts each element of x right by shift bits.
-// If shift is greater than the element width, the result is 0 or -1.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0 or -1, depending on the sign of the element.
 //
 //	z[i] = x[i] >> shift
 //
@@ -2139,7 +2163,8 @@ func (x Uint64x2) ShiftAllLeft(shift uint64) (z Uint64x2)
 func (x Int8x16) ShiftAllRight(shift uint64) (z Int8x16)
 
 // ShiftAllRight logically shifts each element of x right by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] >> shift
 //
@@ -2147,7 +2172,8 @@ func (x Int8x16) ShiftAllRight(shift uint64) (z Int8x16)
 func (x Uint8x16) ShiftAllRight(shift uint64) (z Uint8x16)
 
 // ShiftAllRight arithmetically shifts each element of x right by shift bits.
-// If shift is greater than the element width, the result is 0 or -1.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0 or -1, depending on the sign of the element.
 //
 //	z[i] = x[i] >> shift
 //
@@ -2155,7 +2181,8 @@ func (x Uint8x16) ShiftAllRight(shift uint64) (z Uint8x16)
 func (x Int16x8) ShiftAllRight(shift uint64) (z Int16x8)
 
 // ShiftAllRight logically shifts each element of x right by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] >> shift
 //
@@ -2163,7 +2190,8 @@ func (x Int16x8) ShiftAllRight(shift uint64) (z Int16x8)
 func (x Uint16x8) ShiftAllRight(shift uint64) (z Uint16x8)
 
 // ShiftAllRight arithmetically shifts each element of x right by shift bits.
-// If shift is greater than the element width, the result is 0 or -1.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0 or -1, depending on the sign of the element.
 //
 //	z[i] = x[i] >> shift
 //
@@ -2171,7 +2199,8 @@ func (x Uint16x8) ShiftAllRight(shift uint64) (z Uint16x8)
 func (x Int32x4) ShiftAllRight(shift uint64) (z Int32x4)
 
 // ShiftAllRight logically shifts each element of x right by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] >> shift
 //
@@ -2179,7 +2208,8 @@ func (x Int32x4) ShiftAllRight(shift uint64) (z Int32x4)
 func (x Uint32x4) ShiftAllRight(shift uint64) (z Uint32x4)
 
 // ShiftAllRight arithmetically shifts each element of x right by shift bits.
-// If shift is greater than the element width, the result is 0 or -1.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0 or -1, depending on the sign of the element.
 //
 //	z[i] = x[i] >> shift
 //
@@ -2187,7 +2217,8 @@ func (x Uint32x4) ShiftAllRight(shift uint64) (z Uint32x4)
 func (x Int64x2) ShiftAllRight(shift uint64) (z Int64x2)
 
 // ShiftAllRight logically shifts each element of x right by shift bits.
-// If shift is greater than the element width, the result is 0.
+// As in Go, if shift is greater than or equal to the element width, the
+// result is 0.
 //
 //	z[i] = x[i] >> shift
 //
@@ -2664,70 +2695,80 @@ func (x Float64x2) IfElse(mask Mask64x2, y Float64x2) (z Float64x2) {
 	return ix.BitSelect(iy, im).BitsToFloat64()
 }
 
-// String returns x in the form "{x[0],x[1],...}".
+// String returns x in the form "{x[0],x[1],...}". Each element is formatted
+// like the %v format specifier.
 func (x Int8x16) String() string {
 	var s [16]int8
 	x.StoreArray(&s)
 	return simdfmt.SliceToString(s[:])
 }
 
-// String returns x in the form "{x[0],x[1],...}".
+// String returns x in the form "{x[0],x[1],...}". Each element is formatted
+// like the %v format specifier.
 func (x Int16x8) String() string {
 	var s [8]int16
 	x.StoreArray(&s)
 	return simdfmt.SliceToString(s[:])
 }
 
-// String returns x in the form "{x[0],x[1],...}".
+// String returns x in the form "{x[0],x[1],...}". Each element is formatted
+// like the %v format specifier.
 func (x Int32x4) String() string {
 	var s [4]int32
 	x.StoreArray(&s)
 	return simdfmt.SliceToString(s[:])
 }
 
-// String returns x in the form "{x[0],x[1],...}".
+// String returns x in the form "{x[0],x[1],...}". Each element is formatted
+// like the %v format specifier.
 func (x Int64x2) String() string {
 	var s [2]int64
 	x.StoreArray(&s)
 	return simdfmt.SliceToString(s[:])
 }
 
-// String returns x in the form "{x[0],x[1],...}".
+// String returns x in the form "{x[0],x[1],...}". Each element is formatted
+// like the %v format specifier.
 func (x Uint8x16) String() string {
 	var s [16]uint8
 	x.StoreArray(&s)
 	return simdfmt.SliceToString(s[:])
 }
 
-// String returns x in the form "{x[0],x[1],...}".
+// String returns x in the form "{x[0],x[1],...}". Each element is formatted
+// like the %v format specifier.
 func (x Uint16x8) String() string {
 	var s [8]uint16
 	x.StoreArray(&s)
 	return simdfmt.SliceToString(s[:])
 }
 
-// String returns x in the form "{x[0],x[1],...}".
+// String returns x in the form "{x[0],x[1],...}". Each element is formatted
+// like the %v format specifier.
 func (x Uint32x4) String() string {
 	var s [4]uint32
 	x.StoreArray(&s)
 	return simdfmt.SliceToString(s[:])
 }
 
-// String returns x in the form "{x[0],x[1],...}".
+// String returns x in the form "{x[0],x[1],...}". Each element is formatted
+// like the %v format specifier.
 func (x Uint64x2) String() string {
 	var s [2]uint64
 	x.StoreArray(&s)
 	return simdfmt.SliceToString(s[:])
 }
 
-// String returns x in the form "{x[0],x[1],...}".
+// String returns x in the form "{x[0],x[1],...}". Each element is formatted
+// like the %v format specifier.
 func (x Float32x4) String() string {
 	var s [4]float32
 	x.StoreArray(&s)
 	return simdfmt.SliceToString(s[:])
 }
 
-// String returns x in the form "{x[0],x[1],...}".
+// String returns x in the form "{x[0],x[1],...}". Each element is formatted
+// like the %v format specifier.
 func (x Float64x2) String() string {
 	var s [2]float64
 	x.StoreArray(&s)
