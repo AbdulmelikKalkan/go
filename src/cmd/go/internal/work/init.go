@@ -9,11 +9,13 @@ package work
 import (
 	"bytes"
 	"cmd/go/internal/base"
+	"cmd/go/internal/build"
 	"cmd/go/internal/cfg"
 	"cmd/go/internal/fsys"
 	"cmd/go/internal/modload"
 	"cmd/internal/quoted"
 	"fmt"
+	"internal/buildcfg"
 	"internal/platform"
 	"os"
 	"os/exec"
@@ -22,6 +24,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -56,6 +59,21 @@ func BuildInit(ld *modload.Loader) {
 	}
 	buildInitStarted = true
 	base.AtExit(closeBuilders)
+
+	// Check CGO_ENABLED=bindings here rather than at startup, so that
+	// commands like go env, go version, and go help keep working with a
+	// saved CGO_ENABLED=bindings setting.
+	if cfg.BuildContext.CgoEnabled == build.CgoBindings {
+		if cfg.Experiment != nil && !cfg.Experiment.CgoBindings {
+			if exp, err := buildcfg.ParseGOEXPERIMENT(cfg.Goos, cfg.Goarch, "cgobindings"); err != nil || !exp.CgoBindings {
+				base.Fatalf("go: CGO_ENABLED=bindings is not supported on %s/%s", cfg.Goos, cfg.Goarch)
+			}
+			base.Fatalf("go: CGO_ENABLED=bindings requires GOEXPERIMENT=cgobindings")
+		}
+		if cfg.BuildContext.Compiler != "gc" {
+			base.Fatalf("go: CGO_ENABLED=bindings is not supported with -compiler=%s", cfg.BuildContext.Compiler)
+		}
+	}
 
 	modload.Init(ld)
 	instrumentInit()
@@ -130,6 +148,9 @@ func fuzzInstrumentFlags() []string {
 }
 
 func instrumentInit() {
+	if cfg.BuildContext.CgoEnabled == build.CgoEnabled && cgoTSanEnabled() {
+		cfg.BuildContext.ToolTags = append(cfg.BuildContext.ToolTags, "tsan")
+	}
 	if !cfg.BuildRace && !cfg.BuildMSan && !cfg.BuildASan {
 		return
 	}
@@ -192,18 +213,13 @@ func instrumentInit() {
 
 	// Check that cgo is enabled.
 	// Note: On macOS, -race does not require cgo. -asan and -msan still do.
-	if !cfg.BuildContext.CgoEnabled && (cfg.Goos != "darwin" || cfg.BuildASan || cfg.BuildMSan) {
+	if cfg.BuildContext.CgoEnabled != build.CgoEnabled && (cfg.Goos != "darwin" || cfg.BuildASan || cfg.BuildMSan) {
 		if runtime.GOOS != cfg.Goos || runtime.GOARCH != cfg.Goarch {
 			fmt.Fprintf(os.Stderr, "go: %s requires cgo\n", modeFlag)
 		} else {
 			fmt.Fprintf(os.Stderr, "go: %s requires cgo; enable cgo by setting CGO_ENABLED=1\n", modeFlag)
 		}
 
-		base.SetExitStatus(2)
-		base.Exit()
-	}
-	if cfg.BuildMSan && cfg.Experiment != nil && cfg.Experiment.CgoBindings {
-		fmt.Fprintf(os.Stderr, "go: -msan is not supported with GOEXPERIMENT=cgobindings\n")
 		base.SetExitStatus(2)
 		base.Exit()
 	}
@@ -215,6 +231,41 @@ func instrumentInit() {
 	}
 	cfg.BuildContext.InstallSuffix += mode
 	cfg.BuildContext.ToolTags = append(cfg.BuildContext.ToolTags, mode)
+}
+
+// cgoTSanEnabled reports whether the C compiler flags in CC, CGO_CPPFLAGS, or
+// CGO_CFLAGS enable ThreadSanitizer (-fsanitize=thread).
+func cgoTSanEnabled() bool {
+	tsan := false
+	for _, key := range []string{"CC", "CGO_CPPFLAGS", "CGO_CFLAGS"} {
+		v := cfg.Getenv(key)
+		if key == "CC" && v == "" {
+			v = cfg.DefaultCC(cfg.Goos, cfg.Goarch)
+		}
+		args, err := quoted.Split(v)
+		if err != nil {
+			continue
+		}
+		if key == "CC" && len(args) > 0 {
+			args = args[1:]
+		}
+		for _, arg := range args {
+			if list, ok := strings.CutPrefix(arg, "-fsanitize="); ok {
+				for s := range strings.SplitSeq(list, ",") {
+					if s == "thread" {
+						tsan = true
+					}
+				}
+			} else if list, ok := strings.CutPrefix(arg, "-fno-sanitize="); ok {
+				for s := range strings.SplitSeq(list, ",") {
+					if s == "thread" || s == "all" {
+						tsan = false
+					}
+				}
+			}
+		}
+	}
+	return tsan
 }
 
 func buildModeInit() {

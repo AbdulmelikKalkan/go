@@ -17,6 +17,7 @@ import (
 	"go/printer"
 	"go/token"
 	"internal/buildcfg"
+	"internal/platform"
 	"io"
 	"maps"
 	"os"
@@ -38,6 +39,7 @@ import (
 type Package struct {
 	PackageName string // name of package
 	PackagePath string
+	fset        *token.FileSet
 	PtrSize     int64
 	IntSize     int64
 	GccOptions  []string
@@ -63,17 +65,19 @@ type typedefInfo struct {
 
 // A File collects information about a single Go input file.
 type File struct {
-	AST         *ast.File           // parsed AST
-	Comments    []*ast.CommentGroup // comments from file
-	Package     string              // Package name
-	Preamble    string              // C preamble (doc comment on import "C")
-	Ref         []*Ref              // all references to C.xxx in AST
-	Calls       []*Call             // all calls to C.xxx in AST
-	ExpFunc     []*ExpFunc          // exported functions for this file
-	Name        map[string]*Name    // map from Go name to Name
-	NamePos     map[*Name]token.Pos // map from Name to position of the first reference
-	NoCallbacks map[string]bool     // C function names with #cgo nocallback directive
-	NoEscapes   map[string]bool     // C function names with #cgo noescape directive
+	AST         *ast.File                  // parsed AST
+	Comments    []*ast.CommentGroup        // comments from file
+	Package     string                     // Package name
+	Preamble    string                     // C preamble (doc comment on import "C")
+	Ref         []*Ref                     // all references to C.xxx in AST
+	Calls       []*Call                    // all calls to C.xxx in AST
+	Lits        []*Lit                     // all  C.xxx{...} literals in AST
+	LitMap      map[*ast.CompositeLit]*Lit // composite literals can be rewritten in TWO WAYS, use this to find and mark done.
+	ExpFunc     []*ExpFunc                 // exported functions for this file
+	Name        map[string]*Name           // map from Go name to Name
+	NamePos     map[*Name]token.Pos        // map from Name to position of the first reference
+	NoCallbacks map[string]bool            // C function names with #cgo nocallback directive
+	NoEscapes   map[string]bool            // C function names with #cgo noescape directive
 	Edit        *edit.Buffer
 
 	debugs []*debug // debug data from iterations of gccDebug. Initialized by File.loadDebug.
@@ -97,6 +101,12 @@ type Call struct {
 	Call     *ast.CallExpr
 	Deferred bool
 	Done     bool
+}
+
+// A Lit refers to a composite literal of a C.xxx type in the AST.
+type Lit struct {
+	Lit  *ast.CompositeLit
+	Done bool
 }
 
 // A Ref refers to an expression of the form C.xxx in the AST.
@@ -271,7 +281,10 @@ var objDir = flag.String("objdir", "", "object directory")
 var importPath = flag.String("importpath", "", "import path of package being built (for comments in generated files)")
 var exportHeader = flag.String("exportheader", "", "where to write export header if any exported functions")
 
+var binding = flag.Bool("binding", false, "generate code for //cgo: binding pragmas without a C compiler")
+
 var ldflags = flag.String("ldflags", "", "flags to pass to C linker")
+var ldflagsSet bool
 
 var gccgo = flag.Bool("gccgo", false, "generate files for use with gccgo")
 var gccgoprefix = flag.String("gccgoprefix", "", "-fgo-prefix option used with gccgo")
@@ -356,15 +369,13 @@ func main() {
 		}
 	}
 
-	p := newPackage(args[:i])
+	p := newPackage(args[:i], fset)
 
-	// We need a C compiler to be available. Check this.
-	var err error
-	gccBaseCmd, err = checkGCCBaseCmd()
-	if err != nil {
-		fatalf("%v", err)
-		os.Exit(2)
-	}
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "ldflags" {
+			ldflagsSet = true
+		}
+	})
 
 	// Record linker flags for external linking.
 	if *ldflags != "" {
@@ -388,6 +399,25 @@ func main() {
 			fatalf("bad CGO_LDFLAGS: %q (%s)", envFlags, err)
 		}
 		p.addToFlag("LDFLAGS", args)
+	}
+
+	if *binding {
+		if !buildcfg.Experiment.CgoBindings {
+			fatalf("-binding requires GOEXPERIMENT=cgobindings")
+		}
+		if !platform.CgoSupported(goos, goarch) {
+			fatalf("-binding is not supported on %s/%s", goos, goarch)
+		}
+		p.processBinding(goFiles)
+		return
+	}
+
+	// We need a C compiler to be available. Check this.
+	var err error
+	gccBaseCmd, err = checkGCCBaseCmd()
+	if err != nil {
+		fatalf("%v", err)
+		os.Exit(2)
 	}
 
 	// Need a unique prefix for the global C symbols that
@@ -433,6 +463,7 @@ func main() {
 
 			f := new(File)
 			f.Edit = edit.NewBuffer(b)
+			f.LitMap = make(map[*ast.CompositeLit]*Lit)
 			f.ParseGo(input, b)
 			f.ProcessCgoDirectives()
 			gccIsClang := f.loadDefines(p.GccOptions)
@@ -505,7 +536,7 @@ func main() {
 
 // newPackage returns a new Package that will invoke
 // gcc with the additional arguments specified in args.
-func newPackage(args []string) *Package {
+func newPackage(args []string, fset *token.FileSet) *Package {
 	goarch = runtime.GOARCH
 	if s := os.Getenv("GOARCH"); s != "" {
 		goarch = s
@@ -531,6 +562,7 @@ func newPackage(args []string) *Package {
 	os.Setenv("LC_ALL", "C")
 
 	p := &Package{
+		fset:        fset,
 		PtrSize:     ptrSize,
 		IntSize:     intSize,
 		Written:     make(map[string]bool),

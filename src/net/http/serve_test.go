@@ -1343,10 +1343,10 @@ func TestHTTP1ServerIdentityResponse(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		// Verify that the connection is closed when the declared Content-Length
 		// is larger than what the handler wrote.
-		st := newHTTP1ServerTest(t, func(w ResponseWriter, req *Request) {
+		st := newHTTP1ServerTest(t, HandlerFunc(func(w ResponseWriter, req *Request) {
 			w.Header().Set("Content-Length", "500")
 			w.Write([]byte("too short"))
-		})
+		}))
 
 		conn := st.dial()
 		conn.writeMessage(
@@ -7865,7 +7865,11 @@ func TestServerConnectionReuse(t *testing.T) {
 				t.Skip(test.skip)
 			}
 			synctest.Test(t, func(t *testing.T) {
-				st := newHTTP1ServerTest(t, test.handler)
+				var handler Handler
+				if test.handler != nil {
+					handler = test.handler
+				}
+				st := newHTTP1ServerTest(t, handler)
 				conn := st.dial()
 				conn.writeMessage(test.message...)
 				resp := conn.readResponse()
@@ -8179,8 +8183,7 @@ func TestServerRequestBodyLength(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				handler := newTestHandler(t)
-				st := newHTTP1ServerTest(t, handler.ServeHTTP)
-				defer handler.Close() // return from handlers before server shutdown
+				st := newHTTP1ServerTest(t, handler)
 				conn := st.dial()
 				conn.conn.Write([]byte(test.message))
 				if test.closeWrite {
@@ -8232,14 +8235,14 @@ func TestServerRequestBodyLength(t *testing.T) {
 func TestServerRequestBodyCloseAfterPartialRead(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		closeErr := make(chan error, 1)
-		st := newHTTP1ServerTest(t, func(w ResponseWriter, req *Request) {
+		st := newHTTP1ServerTest(t, HandlerFunc(func(w ResponseWriter, req *Request) {
 			// Read part of the body, leaving the rest for Close to drain.
 			if _, err := io.ReadFull(req.Body, make([]byte, 2)); err != nil {
 				closeErr <- fmt.Errorf("reading request body: %v", err)
 				return
 			}
 			closeErr <- req.Body.Close()
-		})
+		}))
 		conn := st.dial()
 		conn.writeMessage(
 			"POST / HTTP/1.1",
@@ -8265,8 +8268,7 @@ func TestServerRequestBodyCloseAfterPartialRead(t *testing.T) {
 func TestServerAbortsWriteOnConnReadError(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		handler := newTestHandler(t)
-		st := newHTTP1ServerTest(t, handler.ServeHTTP)
-		defer handler.Close() // return from handlers before server shutdown
+		st := newHTTP1ServerTest(t, handler)
 		conn := st.dial()
 		conn.writeMessage(
 			"GET / HTTP/1.1",
@@ -8359,7 +8361,7 @@ func testServerIdleKeepAlive(t *testing.T, wrap func(net.Listener) net.Listener)
 		srv.Close()
 		<-srvDone
 	}()
-	defer handler.Close()
+	defer handler.Cleanup()
 
 	conn := li.NewConn()
 	defer conn.Close()
@@ -8407,8 +8409,7 @@ func TestServerIdleKeepAliveNonstandardTimeoutError(t *testing.T) {
 func TestServerCONNECTSuccess(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		handler := newTestHandler(t)
-		st := newHTTP1ServerTest(t, handler.ServeHTTP)
-		defer handler.Close() // return from handlers before server shutdown
+		st := newHTTP1ServerTest(t, handler)
 		conn := st.dial()
 		conn.writeMessage(
 			"CONNECT backend.example.tld:80 HTTP/1.1",
@@ -8446,8 +8447,7 @@ func TestServerCONNECTSuccess(t *testing.T) {
 func TestServerCONNECTFailure(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		handler := newTestHandler(t)
-		st := newHTTP1ServerTest(t, handler.ServeHTTP)
-		defer handler.Close() // return from handlers before server shutdown
+		st := newHTTP1ServerTest(t, handler)
 		conn := st.dial()
 		conn.writeMessage(
 			"CONNECT backend.example.tld:80 HTTP/1.1",
@@ -8545,4 +8545,36 @@ func TestHandleRequest(t *testing.T) {
 			t.Errorf("status = %d, want 200", w.Code)
 		}
 	})
+}
+
+func TestServerHandlerManyTrailers(t *testing.T) { runSynctest(t, testServerHandlerManyTrailers) }
+func testServerHandlerManyTrailers(t *testing.T, mode testMode) {
+	const numTrailers = 100000
+	trailerKey := func(i int) string {
+		return fmt.Sprintf("A-%d", i)
+	}
+
+	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
+		var trailers strings.Builder
+		for i := range numTrailers {
+			if i > 0 {
+				trailers.WriteString(", ")
+			}
+			trailers.WriteString(trailerKey(i))
+		}
+		w.Header().Set("Trailer", trailers.String())
+		w.WriteHeader(StatusOK)
+		w.Write([]byte("body"))
+		for i := range numTrailers {
+			w.Header().Set(trailerKey(i), strconv.Itoa(i))
+		}
+	}))
+
+	res, err := cst.c.Get(cst.ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	// It's okay if this fails because the server refuses to deal with this nonsense.
+	io.ReadAll(res.Body)
 }
