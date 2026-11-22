@@ -7,7 +7,6 @@
 package cgo
 
 import (
-	"internal/abi"
 	"internal/cpu"
 	"internal/runtime/atomic"
 	"unsafe"
@@ -48,13 +47,17 @@ func runtime_cgocall(fn, arg unsafe.Pointer) int32
 
 // cgoCallFrame holds the target function, up to 6 integer/pointer arguments,
 // and the return value for cgoCallTrampoline.
+//
+// The helpers below fill in a cgoCallFrame field by field rather than with
+// a composite literal. When compiled with -N, a composite literal is built
+// in a separate stack temporary and then copied, which would make the
+// frames of the nosplit helpers large enough to push nosplit chains such
+// as x_cgo_init's over the nosplit stack limit.
 type cgoCallFrame struct {
 	fn                     uintptr
 	a0, a1, a2, a3, a4, a5 uintptr
 	r1                     uintptr
 }
-
-func cgoCallTrampoline()
 
 // asmcgocall calls a C function pointer fn with up to 6 integer/pointer
 // arguments on the system stack via runtime.asmcgocall without entering
@@ -64,8 +67,9 @@ func cgoCallTrampoline()
 //go:norace
 //go:nocheckptr
 func asmcgocall(fn, a0, a1, a2, a3, a4, a5 uintptr) uintptr {
-	f := cgoCallFrame{fn: fn, a0: a0, a1: a1, a2: a2, a3: a3, a4: a4, a5: a5}
-	runtime_asmcgocall(unsafe.Pointer(abi.FuncPCABI0(cgoCallTrampoline)), unsafe.Pointer(&f))
+	var f cgoCallFrame
+	f.fn, f.a0, f.a1, f.a2, f.a3, f.a4, f.a5 = fn, a0, a1, a2, a3, a4, a5
+	runtime_asmcgocall(cgoCallTrampolinePC(), unsafe.Pointer(&f))
 	return f.r1
 }
 
@@ -79,20 +83,44 @@ func asmcgocall(fn, a0, a1, a2, a3, a4, a5 uintptr) uintptr {
 //go:norace
 //go:nocheckptr
 func asmcgocallNoG(fn, a0, a1, a2, a3, a4, a5 uintptr) uintptr {
-	f := cgoCallFrame{fn: fn, a0: a0, a1: a1, a2: a2, a3: a3, a4: a4, a5: a5}
-	runtime_asmcgocall_no_g(unsafe.Pointer(abi.FuncPCABI0(cgoCallTrampoline)), unsafe.Pointer(&f))
+	var f cgoCallFrame
+	f.fn, f.a0, f.a1, f.a2, f.a3, f.a4, f.a5 = fn, a0, a1, a2, a3, a4, a5
+	runtime_asmcgocall_no_g(cgoCallTrampolinePC(), unsafe.Pointer(&f))
 	return f.r1
+}
+
+//go:nosplit
+//go:norace
+func asmcgocallMode(noG bool, fn, a0, a1, a2, a3, a4, a5 uintptr) uintptr {
+	if noG {
+		return asmcgocallNoG(fn, a0, a1, a2, a3, a4, a5)
+	}
+	return asmcgocall(fn, a0, a1, a2, a3, a4, a5)
 }
 
 // cgocall calls a C function pointer fn with up to 6 integer/pointer
 // arguments via runtime.cgocall, entering and exiting the scheduler.
 //
+//go:nosplit
 //go:norace
 //go:nocheckptr
 func cgocall(fn, a0, a1, a2, a3, a4, a5 uintptr) uintptr {
-	f := cgoCallFrame{fn: fn, a0: a0, a1: a1, a2: a2, a3: a3, a4: a4, a5: a5}
-	runtime_cgocall(unsafe.Pointer(abi.FuncPCABI0(cgoCallTrampoline)), unsafe.Pointer(&f))
+	var f cgoCallFrame
+	f.fn, f.a0, f.a1, f.a2, f.a3, f.a4, f.a5 = fn, a0, a1, a2, a3, a4, a5
+	runtime_cgocall(cgoCallTrampolinePC(), unsafe.Pointer(&f))
 	return f.r1
+}
+
+// cgocallErr is like cgocall and also returns the int32 result from
+// runtime.cgocall (on Windows, GetLastError captured before exitsyscall).
+//
+//go:norace
+//go:nocheckptr
+func cgocallErr(fn, a0, a1, a2, a3, a4, a5 uintptr) (uintptr, uint32) {
+	var f cgoCallFrame
+	f.fn, f.a0, f.a1, f.a2, f.a3, f.a4, f.a5 = fn, a0, a1, a2, a3, a4, a5
+	errno := runtime_cgocall(cgoCallTrampolinePC(), unsafe.Pointer(&f))
+	return f.r1, uint32(errno)
 }
 
 //go:nosplit
@@ -105,11 +133,19 @@ func tsanAcquireNoG() {}
 
 //go:nosplit
 //go:norace
+func tsanAcquireMode(noG bool) {}
+
+//go:nosplit
+//go:norace
 func tsanRelease() {}
 
 //go:nosplit
 //go:norace
 func tsanReleaseNoG() {}
+
+//go:nosplit
+//go:norace
+func tsanReleaseMode(noG bool) {}
 
 //go:nosplit
 //go:norace

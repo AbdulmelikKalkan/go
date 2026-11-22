@@ -25,9 +25,11 @@ stderr 'source files requiring a C compiler not allowed in a package using cgo b
 rm cfile.c
 go run .
 stdout '^abs=7 cabs=7 strlen=5$'
+stdout '^builtins=hi!,hi,abcd,xyz$'
 env CGO_ENABLED=bindings
 go run .
 stdout '^abs=7 cabs=7 strlen=5$'
+stdout '^builtins=hi!,hi,abcd,xyz$'
 
 # Building with CGO_ENABLED=bindings requires the cgobindings experiment, but
 # commands that do not build, like go env and go version, still work.
@@ -120,6 +122,7 @@ cc -fPIC -c -o static.syso ../c/static.c
 [!cgolinkext] go run -ldflags=-linkmode=internal .
 [cgolinkext] go run .
 stdout '^static=42$'
+stdout '^counter=42$'
 
 -- c/c.c --
 int Add(int a, int b) { return a + b; }
@@ -160,6 +163,7 @@ void WritePtr(int *p, int val) { *p = val; }
 
 -- c/static.c --
 int StaticTwice(int x) { return 2 * x; }
+int StaticCounter = 40;
 
 -- p/go.mod --
 module p
@@ -233,11 +237,16 @@ import "C"
 import "fmt"
 
 //cgo:func StaticTwice StaticTwice static
+//cgo:var counter StaticCounter static
 
 func StaticTwice(x int32) int32
 
+var counter int32
+
 func main() {
 	fmt.Printf("static=%d\n", StaticTwice(21))
+	counter += 2
+	fmt.Printf("counter=%d\n", counter)
 }
 
 -- withcfile/go.mod --
@@ -261,15 +270,28 @@ package main
 
 // #include <stdlib.h>
 import "C"
-import "fmt"
+import (
+	"fmt"
+	"unsafe"
+)
 
 //cgo:func Abs C.abs libc
+//cgo:func Free free libc
 func Abs(int32) int32
+func Free(unsafe.Pointer)
 
 func Strlen(s *byte) uintptr
 
 func main() {
 	fmt.Printf("abs=%d cabs=%d strlen=%d\n", Abs(-7), C.abs(-7), Strlen(&[]byte("hello\x00")[0]))
+	cs := C.CString("hi!")
+	defer Free(unsafe.Pointer(cs))
+	cb := C.CBytes([]byte("abcd"))
+	defer Free(cb)
+	pm := C.malloc(4)
+	defer Free(pm)
+	*(*[4]byte)(pm) = [4]byte{'x', 'y', 'z', 0}
+	fmt.Printf("builtins=%s,%s,%s,%s\n", C.GoString(cs), C.GoStringN(cs, 2), string(C.GoBytes(cb, 4)), C.GoString((*C.char)(pm)))
 }
 
 -- dual/go.mod --
