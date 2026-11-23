@@ -1406,6 +1406,7 @@ func gcMarkTermination(stw worldStop) {
 	})
 
 	var stwSwept bool
+	var mProfHeapStats heapStatsDelta
 	systemstack(func() {
 		work.heap2 = work.bytesMarked
 		if debug.gccheckmark > 0 {
@@ -1417,6 +1418,12 @@ func gcMarkTermination(stw worldStop) {
 
 		// marking is complete so we can turn the write barrier off
 		setGCPhase(_GCoff)
+
+		// Advance the heap profiling cycle so that allocations leading
+		// up to this mark termination and frees from the subsequent
+		// sweeping are published together. We need to update the cycle
+		// here since gcSweep can do the sweeping synchronously.
+		mProf_AdvanceCycle(&mProfHeapStats)
 		stwSwept = gcSweep(work.mode)
 	})
 
@@ -1499,11 +1506,6 @@ func gcMarkTermination(stw worldStop) {
 	// Release the CPU limiter.
 	gcCPULimiter.finishGCTransition(now)
 
-	// Finish the current heap profiling cycle and start a new
-	// heap profiling cycle. We do this before starting the world
-	// so events don't leak into the wrong cycle.
-	mProf_NextCycle()
-
 	// There may be stale spans in mcaches that need to be swept.
 	// Those aren't tracked in any sweep lists, so we need to
 	// count them against sweep completion until we ensure all
@@ -1528,6 +1530,13 @@ func gcMarkTermination(stw worldStop) {
 		gcRestoreSyncObjects()
 	}
 
+	if stwSwept {
+		// Sweeping is already complete. Collect runtime metrics before
+		// restarting the world so they are up to date when this cycle is published.
+		i := mProfCycleNext(mProfCycle.read()) % uint32(len(memRecord{}.future))
+		captureMProfMetrics(&mProfMetrics[i], &mProfHeapStats, mProfMCacheAllocBytes.Load())
+	}
+
 	var goroutineLeakDone bool
 	systemstack(func() {
 		// Pull the GC out of goroutine leak detection mode.
@@ -1547,10 +1556,16 @@ func gcMarkTermination(stw worldStop) {
 		startTheWorldWithSema(now, stw)
 	})
 
-	// Flush the heap profile so we can start a new cycle next GC.
+	// Publish the heap profile so we can start a new cycle next GC.
 	// This is relatively expensive, so we don't do it with the
 	// world stopped.
-	mProf_Flush()
+
+	mProf_Publish()
+	if stwSwept {
+		// Sweeping has already completed, so publish its frees without
+		// advancing the cycle, as we do in GC()
+		mProf_PostSweep()
+	}
 
 	// Prepare workbufs for freeing by the sweeper. We do this
 	// asynchronously because it can take non-trivial time.
@@ -1588,6 +1603,12 @@ func gcMarkTermination(stw worldStop) {
 		}
 		pp.pinnerCache = nil
 	})
+	if !stwSwept {
+		// All stale mcaches are now accounted for, so we can publish
+		// the memory metrics for this profile cycle.
+		i := mProfCycleNext(mProfCycle.read()) % uint32(len(memRecord{}.future))
+		captureMProfMetrics(&mProfMetrics[i], &mProfHeapStats, mProfMCacheAllocBytes.Load())
+	}
 	if sl.valid {
 		// Now that we've swept stale spans in mcaches, they don't
 		// count against unswept spans.
@@ -2114,11 +2135,6 @@ func gcSweep(mode gcMode) bool {
 		for freeSomeWbufs(false) {
 		}
 		freeDeadSpanSPMCs()
-		// All "free" events for this mark/sweep cycle have
-		// now happened, so we can make this profile cycle
-		// available immediately.
-		mProf_NextCycle()
-		mProf_Flush()
 		return true
 	}
 

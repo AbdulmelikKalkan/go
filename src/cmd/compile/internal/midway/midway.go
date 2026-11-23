@@ -6,6 +6,7 @@ package midway
 
 import (
 	"internal/buildcfg"
+	"strings"
 )
 
 func rewriteSizes() []int {
@@ -22,9 +23,21 @@ func rewriteSizes() []int {
 
 const SimdPkg = "simd"
 const SimdBridgePkg = "simd/internal/bridge"
+
+// Private @-prefixed import aliases used for midway-generated references so
+// injected imports cannot collide with user identifiers, imports, or locals.
+const simdPkgAlias = "@simd"
 const archPkg = "bridge"
+const archPkgAlias = "@bridge"
 const vectorSizeFn = "VectorBits"
 const emulatedFn = "Emulated"
+
+// IsSpecializedName reports whether name is the name midway gave to a
+// size-specialized copy of a package-level declaration, such as "F@simd128".
+// "@" can't appear in a Go identifier, so no user declaration has such a name.
+func IsSpecializedName(name string) bool {
+	return strings.Contains(name, "@simd")
+}
 
 func isSimdTypeName(s string) bool {
 	switch s {

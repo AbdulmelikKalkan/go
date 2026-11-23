@@ -2,10 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build wasm
+package main
 
-package drbg
+import "simd"
 
-func getEntropy() *[SeedSize]byte {
-	panic("FIPS 140-3 entropy generation is not supported on Wasm")
+// Lanes uses package simd, but has no SIMD types in its signature.
+func Lanes() int {
+	return simd.Int32s{}.Len()
 }
+
+func main() {}

@@ -777,10 +777,14 @@ func checkBindingExternalLinker(root *Action, ldBuildmode string, cxx bool, comp
 	}
 	// cmd/go sets CC and CXX in its own environment (see cfg.CmdEnv),
 	// so check whether the user changed them rather than whether they
-	// are set.
+	// are set. Also treat the built-in generic defaults ("gcc", "clang",
+	// "g++", "clang++") as unset for a cross-compile, since DefaultCC
+	// returns "clang" on darwin/ios/freebsd/openbsd and "gcc" elsewhere
+	// even when no target-specific cross-compiler was configured.
 	ccChanged := slices.ContainsFunc(cfg.CmdEnv, func(e cfg.EnvVar) bool { return e.Name == envName && e.Changed })
+	def := defaultCC(cfg.Goos, cfg.Goarch)
 	crossWithoutCC := (cfg.Goos != runtime.GOOS || cfg.Goarch != runtime.GOARCH) && !ccChanged &&
-		defaultCC(cfg.Goos, cfg.Goarch) == defaultCC(runtime.GOOS, runtime.GOARCH)
+		(def == defaultCC(runtime.GOOS, runtime.GOARCH) || def == "gcc" || def == "clang" || def == "g++" || def == "clang++")
 	missingCC := len(compiler) == 0
 	if !missingCC {
 		_, err := pathcache.LookPath(compiler[0])
@@ -796,12 +800,8 @@ func checkBindingExternalLinker(root *Action, ldBuildmode string, cxx bool, comp
 // linker for a program using cgo bindings built with the given link
 // buildmode. It mirrors mustLinkExternal in cmd/link/internal/ld.
 func bindingNeedsExternalLink(ldBuildmode string) bool {
-	if platform.MustLinkExternal(cfg.Goos, cfg.Goarch, false) {
-		return true
-	}
-	// cmd/link can internally link cgo binding programs that have no host
-	// objects on android/arm64.
-	if platform.MustLinkExternal(cfg.Goos, cfg.Goarch, true) && !(cfg.Goos == "android" && cfg.Goarch == "arm64") {
+	// Programs using cgo bindings have no C host objects.
+	if platform.MustLinkExternalWithoutHostObj(cfg.Goos, cfg.Goarch) {
 		return true
 	}
 	switch ldBuildmode {
