@@ -398,7 +398,7 @@ func testFreegc[T comparable](noscan bool) func(*testing.T) {
 			}
 		})
 
-		if runtime.GOARCH == "wasm" {
+		if runtime.GOARCH == "wasm" || runtime.GOARCH == "wasm32" {
 			// TODO(thepudds): for wasm, double-check if just slow, vs. some test logic problem,
 			// vs. something else. It might have been wasm was slowest with tests that spawn
 			// many goroutines, which might be expected for wasm. This skip might no longer be
@@ -846,6 +846,7 @@ func BenchmarkGoroutineIdle(b *testing.B) {
 func TestMkmalloc(t *testing.T) {
 	testenv.MustHaveGoRun(t)
 	testenv.MustHaveExternalNetwork(t) // To download the golang.org/x/tools dependency.
+	t.Parallel()
 	output, err := exec.Command("go", "-C", "_mkmalloc", "test").CombinedOutput()
 	t.Logf("test output:\n%s", output)
 	if err != nil {

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build !wasm
+//go:build !wasm && !wasm32
 
 package runtime
 
@@ -21,7 +21,8 @@ import (
 //	func semasleep(ns int64) int32
 //		If ns < 0, acquire m's semaphore and return 0.
 //		If ns >= 0, try to acquire m's semaphore for at most ns nanoseconds.
-//		Return 0 if the semaphore was acquired, -1 if interrupted or timed out.
+//		Return 0 if the semaphore was acquired.
+//		Return -1, and leave the semaphore state unchanged, if timed out.
 //
 //	func semawakeup(mp *m)
 //		Wake up mp, which is or will soon be sleeping on its semaphore.

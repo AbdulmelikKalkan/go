@@ -6,6 +6,7 @@ package mlkem_test
 
 import (
 	"bytes"
+	"crypto/fips140"
 	"crypto/internal/cryptotest"
 	"crypto/internal/fips140/mlkem"
 	"crypto/internal/fips140/sha3"
@@ -96,6 +97,30 @@ func testRoundTrip[E encapsulationKey, D decapsulationKey[E]](
 	if bytes.Equal(Ke, Ke2) {
 		t.Fail()
 	}
+}
+
+func TestKeyEncoding(t *testing.T) {
+	dk768, err := GenerateKey768()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("DecapsulationKey768", func(t *testing.T) {
+		cryptotest.TestKeyEncoding(t, dk768, NewDecapsulationKey768, (*DecapsulationKey768).Bytes)
+	})
+	t.Run("EncapsulationKey768", func(t *testing.T) {
+		cryptotest.TestKeyEncoding(t, dk768.EncapsulationKey(), NewEncapsulationKey768, (*EncapsulationKey768).Bytes)
+	})
+
+	dk1024, err := GenerateKey1024()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("DecapsulationKey1024", func(t *testing.T) {
+		cryptotest.TestKeyEncoding(t, dk1024, NewDecapsulationKey1024, (*DecapsulationKey1024).Bytes)
+	})
+	t.Run("EncapsulationKey1024", func(t *testing.T) {
+		cryptotest.TestKeyEncoding(t, dk1024.EncapsulationKey(), NewEncapsulationKey1024, (*EncapsulationKey1024).Bytes)
+	})
 }
 
 func TestSharedKeyCapacity(t *testing.T) {
@@ -264,6 +289,54 @@ func TestAccumulated(t *testing.T) {
 	got := hex.EncodeToString(o.Sum(nil))
 	if got != expected {
 		t.Errorf("got %s, expected %s", got, expected)
+	}
+}
+
+func TestAllocations(t *testing.T) {
+	cryptotest.SkipTestAllocations(t)
+	// We allocate
+	//
+	//   - the DecapsulationKey768 structs (k and kk) and their inner structs
+	//   - the EncapsulationKey768 struct and its inner struct
+	//   - the seed, encapsulation key, shared key (twice), and ciphertext
+	//     byte slices
+	//
+	// on the heap. The structs are too large for the stack, and the byte
+	// slices are returned to the caller.
+	//
+	// Still, check we are not slipping more allocations in.
+	var expected float64 = 10
+	if fips140.Enabled() {
+		// The PCT does an encapsulation/decapsulation cycle, which allocates
+		// the shared key slices and the ciphertext.
+		expected += 3
+	}
+	if allocs := testing.AllocsPerRun(100, func() {
+		k, err := GenerateKey768()
+		if err != nil {
+			t.Fatalf("GenerateKey768: %v", err)
+		}
+		seed := k.Bytes()
+		kk, err := NewDecapsulationKey768(seed)
+		if err != nil {
+			t.Fatalf("NewDecapsulationKey768: %v", err)
+		}
+		ekBytes := kk.EncapsulationKey().Bytes()
+		ek, err := NewEncapsulationKey768(ekBytes)
+		if err != nil {
+			t.Fatalf("NewEncapsulationKey768: %v", err)
+		}
+		sharedKey, ciphertext := ek.Encapsulate()
+		decapsulatedKey, err := kk.Decapsulate(ciphertext)
+		if err != nil {
+			t.Fatalf("Decapsulate: %v", err)
+		}
+		if !bytes.Equal(sharedKey, decapsulatedKey) {
+			t.Fatal("shared keys do not match")
+		}
+		sink ^= sharedKey[0]
+	}); allocs > expected {
+		t.Errorf("expected %0.0f allocations, got %0.1f", expected, allocs)
 	}
 }
 

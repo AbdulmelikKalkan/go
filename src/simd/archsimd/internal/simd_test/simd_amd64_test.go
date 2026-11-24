@@ -259,19 +259,19 @@ func TestBitMaskToBits(t *testing.T) {
 	if v := archsimd.LoadInt32x4(int32s[:4]).ToMask().ToBits(); v != want4 {
 		t.Errorf("want %b, got %b", want4, v)
 	}
-	if v := archsimd.LoadInt32x8(int32s[:8]).ToMask().ToBits(); v != want8 {
-		t.Errorf("want %b, got %b", want8, v)
-	}
 	if v := archsimd.LoadInt64x2(int64s[:2]).ToMask().ToBits(); v != want2 {
 		t.Errorf("want %b, got %b", want2, v)
-	}
-	if v := archsimd.LoadInt64x4(int64s[:4]).ToMask().ToBits(); v != want4 {
-		t.Errorf("want %b, got %b", want4, v)
 	}
 
 	if archsimd.X86.AVX2() {
 		if v := archsimd.LoadInt8x32(int8s[:32]).ToMask().ToBits(); v != want32 {
 			t.Errorf("want %b, got %b", want32, v)
+		}
+		if v := archsimd.LoadInt32x8(int32s[:8]).ToMask().ToBits(); v != want8 {
+			t.Errorf("want %b, got %b", want8, v)
+		}
+		if v := archsimd.LoadInt64x4(int64s[:4]).ToMask().ToBits(); v != want4 {
+			t.Errorf("want %b, got %b", want4, v)
 		}
 	}
 
@@ -448,6 +448,9 @@ func TestRotateAllConst(t *testing.T) {
 }
 
 func TestBroadcastFloat32x8(t *testing.T) {
+	if !archsimd.X86.AVX2() {
+		t.Skip("Test requires X86.AVX2, not available on this hardware")
+	}
 	s := make([]float32, 8, 8)
 	archsimd.BroadcastFloat32x8(123456789).Store(s)
 	checkSlices(t, s, []float32{123456789, 123456789, 123456789, 123456789, 123456789, 123456789, 123456789, 123456789})
@@ -828,6 +831,9 @@ func TestConcatPermuteScalarsConstGroupedUint32x16(t *testing.T) {
 }
 
 func TestConcatPermute128Scalars(t *testing.T) {
+	if !archsimd.X86.AVX2() {
+		t.Skip("Test requires X86.AVX2, not available on this hardware")
+	}
 	x := archsimd.LoadUint64x4([]uint64{0, 1, 2, 3})
 	y := archsimd.LoadUint64x4([]uint64{4, 5, 6, 7})
 
@@ -855,6 +861,9 @@ func TestConcatPermute128Scalars(t *testing.T) {
 }
 
 func TestConcatPermute128ScalarsError(t *testing.T) {
+	if !archsimd.X86.AVX2() {
+		t.Skip("Test requires X86.AVX2, not available on this hardware")
+	}
 	x := archsimd.LoadUint64x4([]uint64{0, 1, 2, 3})
 	y := archsimd.LoadUint64x4([]uint64{4, 5, 6, 7})
 
@@ -874,6 +883,9 @@ func select128FromPair(x archsimd.Uint64x4, lo, hi uint8, y archsimd.Uint64x4) a
 }
 
 func TestConcatPermute128ScalarsVar(t *testing.T) {
+	if !archsimd.X86.AVX2() {
+		t.Skip("Test requires X86.AVX2, not available on this hardware")
+	}
 	x := archsimd.LoadUint64x4([]uint64{0, 1, 2, 3})
 	y := archsimd.LoadUint64x4([]uint64{4, 5, 6, 7})
 
@@ -1133,6 +1145,20 @@ func TestSelectTernOptInt32x16(t *testing.T) {
 		return (x ^ y ^ z) & (x ^ y ^ ^z)
 	}
 	foo(t2, applyTo3(x, y, z, ft2))
+
+	// t3 and t4 share a subexpression that has three inputs of its own.
+	xyz := x.Or(y.Or(z))
+	t3 := xyz.And(m)
+	ft3 := func(x, y, z, m int32) int32 {
+		return (x | y | z) & m
+	}
+	foo(t3, applyTo4(x, y, z, m, ft3))
+
+	t4 := xyz.Xor(w)
+	ft4 := func(x, y, z, w int32) int32 {
+		return (x | y | z) ^ w
+	}
+	foo(t4, applyTo4(x, y, z, w, ft4))
 }
 
 func TestMaskedMerge(t *testing.T) {

@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"net/http/internal"
@@ -30,7 +31,9 @@ import (
 // A server is an HTTP/3 server.
 // The zero value for server is a valid server.
 type server struct {
-	srv1 *http.Server
+	srv1              *http.Server
+	disableKeepAlives atomic.Bool // reflects srv1's unexported disableKeepAlives
+
 	opts ServerOpts
 
 	initOnce sync.Once
@@ -38,9 +41,10 @@ type server struct {
 	// connClosed is used to signal that a connection has been unregistered
 	// from activeConns. That way, when shutting down gracefully, the server
 	// can avoid busy-waiting for activeConns to be empty.
-	connClosed  chan any
-	mu          sync.Mutex // Guards fields below.
-	activeConns map[*serverConn]struct{}
+	connClosed   chan any
+	mu           sync.Mutex // Guards fields below.
+	activeConns  map[*serverConn]struct{}
+	shuttingDown bool
 }
 
 // netHTTPServer implements the net/http.http3Server interface,
@@ -71,6 +75,11 @@ func (s netHTTPServer) ServeHTTP3(ctx context.Context, conn net.PacketConn, tlsC
 func (s netHTTPServer) Shutdown(ctx context.Context) error {
 	s.shutdown(ctx)
 	return nil
+}
+
+// SetKeepAlivesEnabled controls whether HTTP keep-alives are enabled.
+func (s netHTTPServer) SetKeepAlivesEnabled(v bool) {
+	s.disableKeepAlives.Store(!v)
 }
 
 type ServerOpts struct {
@@ -113,7 +122,9 @@ func (s *server) serve(ctx context.Context, e *quic.Endpoint) error {
 		if err != nil {
 			return err
 		}
-		go s.newServerConn(s.connContext(ctx, qconn), qconn)
+		connCtx := s.connContext(ctx, qconn)
+		s.connState(qconn, http.StateNew) // before serve can return
+		go s.newServerConn(connCtx, qconn)
 	}
 }
 
@@ -129,6 +140,7 @@ func (s *server) shutdown(ctx context.Context) {
 	// Send GOAWAY frames to all active connections to give a chance for them
 	// to gracefully terminate.
 	s.mu.Lock()
+	s.shuttingDown = true
 	for sc := range s.activeConns {
 		// TODO: Modify x/net/quic stream API so that write errors from context
 		// deadline are sticky.
@@ -168,6 +180,13 @@ func (s *server) shutdown(ctx context.Context) {
 func (s *server) registerConn(sc *serverConn) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.shuttingDown {
+		sc.abort(&connectionError{
+			code:    errH3NoError,
+			message: "server is shutting down",
+		})
+		return
+	}
 	s.activeConns[sc] = struct{}{}
 }
 
@@ -219,6 +238,12 @@ func (s *server) connContext(ctx context.Context, qconn *quic.Conn) context.Cont
 	return s.srv1.ConnContext(ctx, quicNetConn{qconn})
 }
 
+func (s *server) connState(qconn *quic.Conn, state http.ConnState) {
+	if s.srv1 != nil && s.srv1.ConnState != nil {
+		s.srv1.ConnState(quicNetConn{qconn}, state)
+	}
+}
+
 type serverConn struct {
 	qconn    *quic.Conn
 	srv      *server
@@ -232,11 +257,15 @@ type serverConn struct {
 	maxHeaderBytes      int64
 	maxHeaderValueCount int64
 
+	mu sync.Mutex
+
 	// For handling shutdown.
-	controlStream      *stream
-	mu                 sync.Mutex // Guards everything below.
-	maxRequestStreamID int64
-	goawaySent         bool
+	controlStream       *stream
+	nextRequestStreamID int64 // Guarded by mu here and below.
+	goawaySent          bool
+
+	activeRequests int // Guarded by mu here and below.
+	state          http.ConnState
 }
 
 // newServerConn handles a new connection.
@@ -256,6 +285,7 @@ func (s *server) newServerConn(baseCtx context.Context, qconn *quic.Conn) {
 		maxHeaderBytes:      int64(s.srv1.MaxHeaderBytes),
 		maxHeaderValueCount: int64(s.srv1.MaxHeaderValueCount),
 	}
+	defer sc.setState(http.StateClosed)
 
 	// Should we permit disabling these limits? For now, we do not.
 	if sc.maxHeaderBytes <= 0 {
@@ -517,10 +547,10 @@ func (sc *serverConn) sendGoaway() {
 	sc.mu.Unlock()
 
 	// No lock in this section in case writing to stream blocks. This is safe
-	// since sc.maxRequestStreamID is only updated when sc.goawaySent is false.
+	// since sc.nextRequestStreamID is only updated when sc.goawaySent is false.
 	sc.controlStream.writeVarint(int64(frameTypeGoaway))
-	sc.controlStream.writeVarint(int64(sizeVarint(uint64(sc.maxRequestStreamID))))
-	sc.controlStream.writeVarint(sc.maxRequestStreamID)
+	sc.controlStream.writeVarint(int64(sizeVarint(uint64(sc.nextRequestStreamID))))
+	sc.controlStream.writeVarint(sc.nextRequestStreamID)
 	sc.controlStream.Flush()
 }
 
@@ -530,11 +560,56 @@ func (sc *serverConn) requestShouldGoaway(st *stream) bool {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	if sc.goawaySent {
-		return st.stream.ID() >= sc.maxRequestStreamID
+		return st.stream.ID() >= sc.nextRequestStreamID
 	} else {
-		sc.maxRequestStreamID = max(sc.maxRequestStreamID, st.stream.ID())
+		sc.nextRequestStreamID = max(sc.nextRequestStreamID, st.stream.ID()+4)
 		return false
 	}
+}
+
+// startRequest and endRequest keep track of the requests being handled,
+// and update the connection state accordingly.
+func (sc *serverConn) startRequest() {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.activeRequests++
+	if sc.activeRequests == 1 {
+		sc.setStateLocked(http.StateActive)
+	}
+}
+
+func (sc *serverConn) endRequest() {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.activeRequests--
+	if sc.activeRequests > 0 {
+		return
+	}
+	sc.setStateLocked(http.StateIdle)
+	// The connection is now idle. Send GOAWAY to indicate to client that it
+	// should close the connection.
+	if sc.srv.disableKeepAlives.Load() {
+		go sc.sendGoaway()
+	}
+}
+
+// setState sets the state of the connection, and reports it to the
+// Server.ConnState hook.
+func (sc *serverConn) setState(state http.ConnState) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.setStateLocked(state)
+}
+
+// setStateLocked is like setState, but sc.mu must be held.
+func (sc *serverConn) setStateLocked(state http.ConnState) {
+	if sc.state == http.StateClosed {
+		// Request handlers can still be running after the connection
+		// has closed, but StateClosed is final.
+		return
+	}
+	sc.state = state
+	sc.srv.connState(sc.qconn, state)
 }
 
 func (sc *serverConn) newResponseWriter(st *stream, hasBody bool) *responseWriter {
@@ -561,6 +636,8 @@ func (sc *serverConn) handleRequestStream(st *stream) error {
 			message: "GOAWAY request with equal or lower ID than the stream has been sent",
 		}
 	}
+	sc.startRequest()
+	defer sc.endRequest()
 
 	readStartTime := time.Now()
 	if t := sc.srv.readHeaderTimeout(); t > 0 {

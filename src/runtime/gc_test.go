@@ -166,7 +166,7 @@ func TestHugeGCInfo(t *testing.T) {
 }
 
 func TestPeriodicGC(t *testing.T) {
-	if runtime.GOARCH == "wasm" {
+	if runtime.GOARCH == "wasm" || runtime.GOARCH == "wasm32" {
 		t.Skip("no sysmon on wasm yet")
 	}
 
@@ -779,6 +779,7 @@ func TestMemoryLimit(t *testing.T) {
 	if runtime.NumCPU() < 4 {
 		t.Skip("want at least 4 CPUs for this test")
 	}
+	t.Parallel()
 	got := runTestProg(t, "testprog", "GCMemoryLimit")
 	want := "OK\n"
 	if got != want {
@@ -793,6 +794,7 @@ func TestMemoryLimitNoGCPercent(t *testing.T) {
 	if runtime.NumCPU() < 4 {
 		t.Skip("want at least 4 CPUs for this test")
 	}
+	t.Parallel()
 	got := runTestProg(t, "testprog", "GCMemoryLimitNoGCPercent")
 	want := "OK\n"
 	if got != want {

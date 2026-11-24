@@ -210,6 +210,7 @@ func init() {
 		pred1fp        = regInfo{inputs: []regMask{pred}, outputs: []regMask{fp}}
 		fp1predfp      = regInfo{inputs: []regMask{fp, pred}, outputs: []regMask{fp}}
 		fp1pred07fp    = regInfo{inputs: []regMask{fp, pred07}, outputs: []regMask{fp}}
+		fp1pred07gp    = regInfo{inputs: []regMask{fp, pred07}, outputs: []regMask{gp}}
 		fpgppred07fp   = regInfo{inputs: []regMask{fp, gp, pred07}, outputs: []regMask{fp}}
 		fp2pred07pred  = regInfo{inputs: []regMask{fp, fp, pred07}, outputs: []regMask{pred}}
 		fp2predfp      = regInfo{inputs: []regMask{fp, fp, pred}, outputs: []regMask{fp}}
@@ -868,6 +869,12 @@ func init() {
 		// PBICSB computes arg1 AND NOT arg2 on the lanes of arg0 and sets the
 		// flags from the result: Z if no lane is set.
 		{name: "PBICSB", argLength: 3, reg: pred3pred, asm: "PBICS", typ: "(Mask,Flags)"}, // arg0=governing predicate, arg1, arg2
+		// Predicate logic on byte lanes: the result is computed in the lanes
+		// that arg0 governs and zero in the others.
+		{name: "PANDB", argLength: 3, reg: pred3pred, asm: "PAND", typ: "Mask"}, // arg0=governing predicate, arg1 AND arg2
+		{name: "PBICB", argLength: 3, reg: pred3pred, asm: "PBIC", typ: "Mask"}, // arg0=governing predicate, arg1 AND NOT arg2
+		{name: "PORRB", argLength: 3, reg: pred3pred, asm: "PORR", typ: "Mask"}, // arg0=governing predicate, arg1 OR arg2
+		{name: "PEORB", argLength: 3, reg: pred3pred, asm: "PEOR", typ: "Mask"}, // arg0=governing predicate, arg1 XOR arg2
 		// PPTEST sets the flags from the lanes of arg1 that arg0 governs: Z if
 		// none is set.
 		{name: "PPTEST", argLength: 2, reg: pred2flags, asm: "PPTEST", typ: "Flags"}, // arg0=governing predicate, arg1
@@ -891,6 +898,16 @@ func init() {
 		{name: "ZDUPIH", argLength: 1, aux: "UInt8", reg: fp11, asm: "ZDUP", typ: "Vec256"}, // arg0=vector, auxint=element index
 		{name: "ZDUPIS", argLength: 1, aux: "UInt8", reg: fp11, asm: "ZDUP", typ: "Vec256"}, // arg0=vector, auxint=element index
 		{name: "ZDUPID", argLength: 1, aux: "UInt8", reg: fp11, asm: "ZDUP", typ: "Vec256"}, // arg0=vector, auxint=element index
+		// ZLASTB{B,H,S,D} copy the last element of arg0 that arg1 governs to a
+		// general register, zero-extended; ZLASTBfp{S,D} copy it to a
+		// floating-point register. LASTB encodes arg1 in three bits, so it is
+		// one of P0-P7.
+		{name: "ZLASTBB", argLength: 2, reg: fp1pred07gp, asm: "ZLASTBW"},                   // arg0=vector, arg1=predicate
+		{name: "ZLASTBH", argLength: 2, reg: fp1pred07gp, asm: "ZLASTBW"},                   // arg0=vector, arg1=predicate
+		{name: "ZLASTBS", argLength: 2, reg: fp1pred07gp, asm: "ZLASTBW"},                   // arg0=vector, arg1=predicate
+		{name: "ZLASTBD", argLength: 2, reg: fp1pred07gp, asm: "ZLASTB"},                    // arg0=vector, arg1=predicate
+		{name: "ZLASTBfpS", argLength: 2, reg: fp1pred07fp, asm: "ZLASTBS", typ: "Float32"}, // arg0=vector, arg1=predicate
+		{name: "ZLASTBfpD", argLength: 2, reg: fp1pred07fp, asm: "ZLASTBD", typ: "Float64"}, // arg0=vector, arg1=predicate
 		// ZCPY is the predicated counterpart of ZDUP.
 		// ZCPY{B,H,S,D}const broadcasts a signed 8-bit immediate to the selected
 		// lanes of a scalable vector and zeroes the inactive lanes (Pg/Z).

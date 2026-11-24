@@ -26,7 +26,10 @@ var versionErrorRx = regexp.MustCompile(`requires go[0-9]+\.[0-9]+ or later`)
 // checkFiles configures and runs the types2 checker on the given
 // parsed source files and then returns the result.
 // The map result value indicates which closures are generated from the bodies of range function loops.
-func checkFiles(m posMap, noders []*noder) (*types2.Package, *types2.Info, map[*syntax.FuncLit]bool) {
+// The slice result value lists the package-level declarations that the
+// midway rewrite kept only for type checking and export data
+// (see [midway.RewriteWrapper]).
+func checkFiles(m posMap, noders []*noder) (*types2.Package, *types2.Info, map[*syntax.FuncLit]bool, []string) {
 	if base.SyntaxErrors() != 0 {
 		base.ErrorExit()
 	}
@@ -48,6 +51,8 @@ func checkFiles(m posMap, noders []*noder) (*types2.Package, *types2.Info, map[*
 	}
 
 	didMidway := false
+	var midwayOriginals []string
+	var initOrderPlan *midway.InitOrderPlan
 
 recheck:
 	// typechecking
@@ -190,7 +195,9 @@ recheck:
 	if buildcfg.Experiment.SIMDStable && !didMidway && simdReachable {
 		didMidway = true
 		// Perform midway transformation on AST directly
-		if midway.RewriteWrapper(pkg, info, files) {
+		var plan *midway.InitOrderPlan
+		if midwayOriginals, plan = midway.RewriteWrapper(pkg, info, files); plan != nil {
+			initOrderPlan = plan
 			// midway made changes; type checking must be repeated.
 			if len(base.Debug.AstDump) > 0 {
 				// TODO how should this interact with -W and textual dumps
@@ -204,6 +211,13 @@ recheck:
 			typecheck.Target.Imports = nil
 			goto recheck
 		}
+	}
+	if initOrderPlan != nil {
+		// Midway's rewrite may have split initializers into several new ones.
+		// Those can wind up in the wrong place in the recomputed init order.
+		// Use the pre-midway init order to put the split initializers where
+		// the original initializers were.
+		initOrderPlan.Apply(info)
 	}
 
 	if len(base.Debug.AstDump) > 0 {
@@ -223,7 +237,7 @@ recheck:
 		dumpSyntax(pkg, info, files, "rangefunc")
 	}
 
-	return pkg, info, rangeInfo
+	return pkg, info, rangeInfo, midwayOriginals
 }
 
 func dumpSyntax(pkg *types2.Package, info *types2.Info, files []*syntax.File, phase string) {

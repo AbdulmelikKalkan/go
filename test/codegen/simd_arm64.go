@@ -413,6 +413,36 @@ func sveReduceMax(x archsimd.Float64s) float64 {
 	return x.ReduceMax()
 }
 
+func sveReduceMin(x archsimd.Float32s) float32 {
+	// arm64:`ZFMINVS\s+Z[0-9]+\.S, P[0-9]+, V[0-9]+` -`FMOV`
+	return x.ReduceMin()
+}
+
+// An integer reduction moves its result from the SIMD&FP register to the
+// general-purpose register that an integer is returned in.
+func sveReduceSumInt16(x archsimd.Int16s) int16 {
+	// arm64:`ZUADDVD\s+Z[0-9]+\.H, P[0-9]+, V[0-9]+` `FMOVD\s+F[0-9]+, R[0-9]+`
+	return x.ReduceSum()
+}
+
+// The moved result is not sign-extended, so widening a signed one extends it.
+func sveReduceSumInt8Wide(x archsimd.Int8s) int64 {
+	// arm64:`ZUADDVD\s+Z[0-9]+\.B, P[0-9]+, V[0-9]+` `FMOVD\s+F[0-9]+, R[0-9]+` `MOVB\s+R[0-9]+, R[0-9]+`
+	return int64(x.ReduceSum())
+}
+
+// SMAXV and UMAXV leave a result one element wide, which is moved the same way.
+func sveReduceMaxUint32(x archsimd.Uint32s) uint32 {
+	// arm64:`ZUMAXVS\s+Z[0-9]+\.S, P[0-9]+, V[0-9]+` `FMOVD\s+F[0-9]+, R[0-9]+`
+	return x.ReduceMax()
+}
+
+// SMINV and UMINV are moved the same way.
+func sveReduceMinInt8(x archsimd.Int8s) int8 {
+	// arm64:`ZSMINVB\s+Z[0-9]+\.B, P[0-9]+, V[0-9]+` `FMOVD\s+F[0-9]+, R[0-9]+`
+	return x.ReduceMin()
+}
+
 // ShiftAllLeft by a constant below the element width is LSL (immediate), and
 // by a larger constant the zero vector. A variable amount is broadcast to
 // 64-bit lanes and shifts by wide elements, which gives zero for an amount of
@@ -457,6 +487,126 @@ func sveShiftAllLeftVar64(x archsimd.Uint64s, s uint64) archsimd.Uint64s {
 	// LSL has no wide form for 64-bit elements; LSL (vectors) is predicated.
 	// arm64:`ZLSL\s+Z[0-9]+\.D, Z[0-9]+\.D, P[0-9]+\.M, Z[0-9]+\.D`
 	return x.ShiftAllLeft(s)
+}
+
+// ShiftAllRight by a constant from 1 to the element width is ASR or LSR
+// (immediate). By a larger constant, LSR gives the zero vector and ASR the
+// sign, which ASR by the element width already gives. A variable amount
+// shifts by wide elements, as for ShiftAllLeft.
+
+func sveShiftAllRightConst(x archsimd.Int32s) archsimd.Int32s {
+	// arm64:`ZASR\s+\$23, Z[0-9]+\.S, Z[0-9]+\.S` -`ZDUP`
+	return x.ShiftAllRight(23)
+}
+
+func sveShiftAllRightConstWidth(x archsimd.Uint16s) archsimd.Uint16s {
+	// arm64:`ZLSR\s+\$16, Z[0-9]+\.H, Z[0-9]+\.H` -`ZDUP`
+	return x.ShiftAllRight(16)
+}
+
+func sveShiftAllRightConst64(x archsimd.Int64s) archsimd.Int64s {
+	// arm64:`ZASR\s+\$64, Z[0-9]+\.D, Z[0-9]+\.D` -`ZDUP` -`PWHILELT`
+	return x.ShiftAllRight(64)
+}
+
+func sveShiftAllRightConstTooBig(x archsimd.Int16s) archsimd.Int16s {
+	// arm64:`ZASR\s+\$16, Z[0-9]+\.H, Z[0-9]+\.H` -`ZDUP`
+	return x.ShiftAllRight(100)
+}
+
+func sveShiftAllRightConstHuge(x archsimd.Int64s) archsimd.Int64s {
+	// arm64:`ZASR\s+\$64, Z[0-9]+\.D, Z[0-9]+\.D` -`ZDUP` -`PWHILELT`
+	return x.ShiftAllRight(1 << 40)
+}
+
+func sveShiftAllRightConstTooBigUnsigned(x archsimd.Uint32s) archsimd.Uint32s {
+	// arm64:`ZDUP\s+\$0,` -`ZLSR`
+	return x.ShiftAllRight(1 << 40)
+}
+
+func sveShiftAllRightConstIfElse(x archsimd.Int16s, m archsimd.Mask16s) archsimd.Int16s {
+	// arm64:`ZASR\s+\$3, Z[0-9]+\.H, P[0-9]+\.M, Z[0-9]+\.H` -`ZSEL`
+	return x.ShiftAllRight(3).IfElse(m, x)
+}
+
+func sveShiftAllRightConstTooBigIfElse(x archsimd.Int8s, m archsimd.Mask8s) archsimd.Int8s {
+	// arm64:`ZASR\s+\$8, Z[0-9]+\.B, P[0-9]+\.M, Z[0-9]+\.B` -`ZSEL`
+	return x.ShiftAllRight(9).IfElse(m, x)
+}
+
+func sveShiftAllRightVar(x archsimd.Uint16s, s uint64) archsimd.Uint16s {
+	// arm64:`ZDUP\s+R[0-9]+, Z[0-9]+\.D` `ZLSR\s+Z[0-9]+\.D, Z[0-9]+\.H, Z[0-9]+\.H` -`CSEL`
+	return x.ShiftAllRight(s)
+}
+
+func sveShiftAllRightVar64(x archsimd.Int64s, s uint64) archsimd.Int64s {
+	// arm64:`ZASR\s+Z[0-9]+\.D, Z[0-9]+\.D, P[0-9]+\.M, Z[0-9]+\.D`
+	return x.ShiftAllRight(s)
+}
+
+func sveShiftAllRightVarIfElse(x archsimd.Uint16s, s uint64, m archsimd.Mask16s) archsimd.Uint16s {
+	// arm64:`ZLSR\s+Z[0-9]+\.D, Z[0-9]+\.H, P[0-9]+\.M, Z[0-9]+\.H` -`ZSEL`
+	return x.ShiftAllRight(s).IfElse(m, x)
+}
+
+func sveShiftAllRightVar64IfElse(x archsimd.Int64s, s uint64, m archsimd.Mask64s) archsimd.Int64s {
+	// arm64:`ZASR\s+Z[0-9]+\.D, Z[0-9]+\.D, P[0-9]+\.M, Z[0-9]+\.D` -`ZSEL` -`PWHILELT`
+	return x.ShiftAllRight(s).IfElse(m, x)
+}
+
+// ShiftLeft by vector is LSL (vectors), which is predicated-only, so it runs
+// under an all-true predicate. It yields 0 for an amount of the element width
+// or more, so nothing clamps the amounts.
+
+func sveShiftLeftVec(x archsimd.Int8s, s archsimd.Uint8s) archsimd.Int8s {
+	// arm64:`PWHILELT` `ZLSL\s+Z[0-9]+\.B, Z[0-9]+\.B, P[0-9]+\.M, Z[0-9]+\.B` -`ZSEL` -`ZUMIN`
+	return x.ShiftLeft(s)
+}
+
+func sveShiftLeftVec64(x archsimd.Uint64s, s archsimd.Uint64s) archsimd.Uint64s {
+	// arm64:`PWHILELT` `ZLSL\s+Z[0-9]+\.D, Z[0-9]+\.D, P[0-9]+\.M, Z[0-9]+\.D` -`ZSEL` -`ZUMIN` -`ZDUP`
+	return x.ShiftLeft(s)
+}
+
+func sveShiftLeftVec64Const(x archsimd.Uint64s) archsimd.Uint64s {
+	// 64-bit LSL (vectors) is ShiftAllLeft's instruction too, so a broadcast
+	// constant amount takes its immediate form.
+	// arm64:`ZLSL\s+\$5, Z[0-9]+\.D, Z[0-9]+\.D` -`PWHILELT`
+	return x.ShiftLeft(archsimd.BroadcastUint64s(5))
+}
+
+func sveShiftLeftVecIfElse(x archsimd.Int16s, s archsimd.Uint16s, m archsimd.Mask16s) archsimd.Int16s {
+	// arm64:`ZLSL\s+Z[0-9]+\.H, Z[0-9]+\.H, P[0-9]+\.M, Z[0-9]+\.H` -`ZSEL` -`PWHILELT`
+	return x.ShiftLeft(s).IfElse(m, x)
+}
+
+func sveShiftLeftVecIfElseAmount(x, s archsimd.Uint16s, m archsimd.Mask16s) archsimd.Uint16s {
+	// The merging form keeps x in the inactive lanes, so a select keeping s stays.
+	// arm64:`PWHILELT` `ZSEL`
+	return x.ShiftLeft(s).IfElse(m, s)
+}
+
+// ShiftRight by vector is LSR or ASR (vectors), the same shape as ShiftLeft.
+// For an amount of the element width or more LSR yields 0 and ASR the sign.
+
+func sveShiftRightVec(x archsimd.Int32s, s archsimd.Uint32s) archsimd.Int32s {
+	// arm64:`PWHILELT` `ZASR\s+Z[0-9]+\.S, Z[0-9]+\.S, P[0-9]+\.M, Z[0-9]+\.S` -`ZSEL` -`ZUMIN`
+	return x.ShiftRight(s)
+}
+
+func sveShiftRightVec64(x archsimd.Uint64s, s archsimd.Uint64s) archsimd.Uint64s {
+	// arm64:`PWHILELT` `ZLSR\s+Z[0-9]+\.D, Z[0-9]+\.D, P[0-9]+\.M, Z[0-9]+\.D` -`ZSEL` -`ZUMIN` -`ZDUP`
+	return x.ShiftRight(s)
+}
+
+func sveShiftRightVecIfElse(x archsimd.Uint8s, s archsimd.Uint8s, m archsimd.Mask8s) archsimd.Uint8s {
+	// arm64:`ZLSR\s+Z[0-9]+\.B, Z[0-9]+\.B, P[0-9]+\.M, Z[0-9]+\.B` -`ZSEL` -`PWHILELT`
+	return x.ShiftRight(s).IfElse(m, x)
+}
+
+func sveShiftRightVecIfElse64(x archsimd.Int64s, s archsimd.Uint64s, m archsimd.Mask64s) archsimd.Int64s {
+	// arm64:`ZASR\s+Z[0-9]+\.D, Z[0-9]+\.D, P[0-9]+\.M, Z[0-9]+\.D` -`ZSEL` -`PWHILELT`
+	return x.ShiftRight(s).IfElse(m, x)
 }
 
 // The zero value of a mask is an all-false predicate.
@@ -509,6 +659,116 @@ func sveMaskToInt(m archsimd.Mask8s) archsimd.Int8s {
 	// Broadcast(-1).Masked(m) folds into a single zeroing CPY.
 	// arm64:`ZCPY\s+\$-1, P[0-9]+\.Z, Z[0-9]+\.B` -`ZDUP` -`ZSEL`
 	return m.ToInt8s()
+}
+
+// The predicate logic instructions are always .B; the governing all-true
+// mask is built at the lane size.
+func sveMaskAnd(x, y archsimd.Mask16s) archsimd.Mask16s {
+	// arm64:`PWHILELT.*P[0-9]+\.H` `PAND\s+P[0-9]+\.B, P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B`
+	return x.And(y)
+}
+
+// A Mask8s has a lane for every bit, so x itself governs.
+func sveMask8sAnd(x, y archsimd.Mask8s) archsimd.Mask8s {
+	// arm64:`PAND\s+P[0-9]+\.B, P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B` -`PWHILELT` -`PTRUE`
+	return x.And(y)
+}
+
+func sveMask8sAndNot(x, y archsimd.Mask8s) archsimd.Mask8s {
+	// arm64:`PBIC\s+P[0-9]+\.B, P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B` -`PWHILELT` -`PTRUE`
+	return x.AndNot(y)
+}
+
+func sveMaskAndNot(x, y archsimd.Mask16s) archsimd.Mask16s {
+	// arm64:`PWHILELT.*P[0-9]+\.H` `PBIC\s+P[0-9]+\.B, P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B`
+	return x.AndNot(y)
+}
+
+func sveMaskOr(x, y archsimd.Mask16s) archsimd.Mask16s {
+	// arm64:`PWHILELT.*P[0-9]+\.H` `PORR\s+P[0-9]+\.B, P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B`
+	return x.Or(y)
+}
+
+func sveMaskXor(x, y archsimd.Mask16s) archsimd.Mask16s {
+	// arm64:`PWHILELT.*P[0-9]+\.H` `PEOR\s+P[0-9]+\.B, P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B`
+	return x.Xor(y)
+}
+
+func sveMaskNot(x archsimd.Mask16s) archsimd.Mask16s {
+	// NOT is an EOR under the all-true mask of the lane size.
+	// arm64:`PWHILELT.*P[0-9]+\.H` `PEOR\s+P[0-9]+\.B, P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B`
+	return x.Not()
+}
+
+// Elem inlines to a bounds check against the runtime length, then LASTB
+// under the mask of lanes 0..i.
+func sveElem32(x archsimd.Int32s, i uint8) int32 {
+	// arm64:`RDVL` `PWHILELT.*P[0-9]+\.S` `ZLASTBW\s+Z[0-9]+\.S, P[0-9]+, R[0-9]+`
+	return x.Elem(i)
+}
+
+// A constant index folds into the PWHILELT bound, and a signed byte is
+// sign-extended where it is widened.
+func sveElemConst8(x archsimd.Int8s) int64 {
+	// arm64:`PWHILELT.*P[0-9]+\.B` `ZLASTBW\s+Z[0-9]+\.B, P[0-9]+, R[0-9]+` `MOVB\s+R[0-9]+, R[0-9]+` -`ADD\s+\$1,`
+	return int64(x.Elem(3))
+}
+
+func sveElemFloat64(x archsimd.Float64s, i uint8) float64 {
+	// arm64:`PWHILELT.*P[0-9]+\.D` `ZLASTBD\s+Z[0-9]+\.D, P[0-9]+, V[0-9]+`
+	return x.Elem(i)
+}
+
+// LASTB takes its predicate in three bits, so with ten masks live across
+// Elem, the predicate must still be one of P0-P7. The selects after Elem
+// use its result, so Elem cannot be scheduled after them.
+func sveElemManyLiveMasks(x, a archsimd.Int32s, i uint8, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9 int) (int32, archsimd.Int32s) {
+	m0 := archsimd.Mask32sFromCount(c0)
+	m1 := archsimd.Mask32sFromCount(c1)
+	m2 := archsimd.Mask32sFromCount(c2)
+	m3 := archsimd.Mask32sFromCount(c3)
+	m4 := archsimd.Mask32sFromCount(c4)
+	m5 := archsimd.Mask32sFromCount(c5)
+	m6 := archsimd.Mask32sFromCount(c6)
+	m7 := archsimd.Mask32sFromCount(c7)
+	m8 := archsimd.Mask32sFromCount(c8)
+	m9 := archsimd.Mask32sFromCount(c9)
+	a = a.IfElse(m0, x)
+	a = a.IfElse(m1, x)
+	a = a.IfElse(m2, x)
+	a = a.IfElse(m3, x)
+	a = a.IfElse(m4, x)
+	a = a.IfElse(m5, x)
+	a = a.IfElse(m6, x)
+	a = a.IfElse(m7, x)
+	a = a.IfElse(m8, x)
+	a = a.IfElse(m9, x)
+	// arm64:`ZLASTBW\s+Z[0-9]+\.S, P[0-7], R[0-9]+` -`ZLASTBW\s+Z[0-9]+\.S, P(?:[89]|1[0-5]),`
+	e := x.Elem(i)
+	y := x.Add(archsimd.BroadcastInt32s(e))
+	a = a.IfElse(m0, y)
+	a = a.IfElse(m1, y)
+	a = a.IfElse(m2, y)
+	a = a.IfElse(m3, y)
+	a = a.IfElse(m4, y)
+	a = a.IfElse(m5, y)
+	a = a.IfElse(m6, y)
+	a = a.IfElse(m7, y)
+	a = a.IfElse(m8, y)
+	a = a.IfElse(m9, y)
+	return e, a
+}
+
+// SetElem: Next after the mask of lanes 0..i-1 selects lane i, and the select
+// over the broadcast folds into a merging CPY.
+func sveSetElem16(x archsimd.Int16s, i uint8, y int16) archsimd.Int16s {
+	// arm64:`PWHILELT.*P[0-9]+\.H` `PPNEXT\s+P[0-9]+\.H, P[0-9]+, P[0-9]+\.H` `ZCPYW\s+R[0-9]+, P[0-9]+\.M, Z[0-9]+\.H` -`ZSEL` -`ZDUP`
+	return x.SetElem(i, y)
+}
+
+func sveSetElemFloat32(x archsimd.Float32s, i uint8, y float32) archsimd.Float32s {
+	// arm64:`PPNEXT\s+P[0-9]+\.S` `ZCPYS\s+V[0-9]+, P[0-9]+\.M, Z[0-9]+\.S` -`ZSEL` -`ZDUP`
+	return x.SetElem(i, y)
 }
 
 func sveBroadcastConstIfElse(m archsimd.Mask16s, z archsimd.Int16s) archsimd.Int16s {

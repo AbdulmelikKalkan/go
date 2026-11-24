@@ -1936,6 +1936,18 @@
 (BroadcastFloat32s x) => (ZDUPIS [0] x)
 (BroadcastFloat64s x) => (ZDUPID [0] x)
 
+// Element i is the last active one of the mask of the first i+1 lanes.
+(ElemInt8s x i) => (ZLASTBB x (Select0 <types.TypeMask> (PWHILELTB (MOVDconst [0]) (ADDconst <typ.UInt64> [1] (MOVBUreg <typ.UInt64> i)))))
+(ElemUint8s x i) => (ZLASTBB x (Select0 <types.TypeMask> (PWHILELTB (MOVDconst [0]) (ADDconst <typ.UInt64> [1] (MOVBUreg <typ.UInt64> i)))))
+(ElemInt16s x i) => (ZLASTBH x (Select0 <types.TypeMask> (PWHILELTH (MOVDconst [0]) (ADDconst <typ.UInt64> [1] (MOVBUreg <typ.UInt64> i)))))
+(ElemUint16s x i) => (ZLASTBH x (Select0 <types.TypeMask> (PWHILELTH (MOVDconst [0]) (ADDconst <typ.UInt64> [1] (MOVBUreg <typ.UInt64> i)))))
+(ElemInt32s x i) => (ZLASTBS x (Select0 <types.TypeMask> (PWHILELTS (MOVDconst [0]) (ADDconst <typ.UInt64> [1] (MOVBUreg <typ.UInt64> i)))))
+(ElemUint32s x i) => (ZLASTBS x (Select0 <types.TypeMask> (PWHILELTS (MOVDconst [0]) (ADDconst <typ.UInt64> [1] (MOVBUreg <typ.UInt64> i)))))
+(ElemFloat32s x i) => (ZLASTBfpS x (Select0 <types.TypeMask> (PWHILELTS (MOVDconst [0]) (ADDconst <typ.UInt64> [1] (MOVBUreg <typ.UInt64> i)))))
+(ElemInt64s x i) => (ZLASTBD x (Select0 <types.TypeMask> (PWHILELTD (MOVDconst [0]) (ADDconst <typ.UInt64> [1] (MOVBUreg <typ.UInt64> i)))))
+(ElemUint64s x i) => (ZLASTBD x (Select0 <types.TypeMask> (PWHILELTD (MOVDconst [0]) (ADDconst <typ.UInt64> [1] (MOVBUreg <typ.UInt64> i)))))
+(ElemFloat64s x i) => (ZLASTBfpD x (Select0 <types.TypeMask> (PWHILELTD (MOVDconst [0]) (ADDconst <typ.UInt64> [1] (MOVBUreg <typ.UInt64> i)))))
+
 // A broadcast of a small constant needs no general register: DUP (immediate)
 // takes a signed 8-bit immediate.
 (ZDUPB (MOVDconst [c])) && c == int64(int8(c)) => (ZDUPBconst [int8(c)])
@@ -2001,6 +2013,32 @@
 (Mask16sAny m) => (NotEqual (PPTEST (Mask16sAllTrue <types.TypeMask>) m))
 (Mask32sAny m) => (NotEqual (PPTEST (Mask32sAllTrue <types.TypeMask>) m))
 (Mask64sAny m) => (NotEqual (PPTEST (Mask64sAllTrue <types.TypeMask>) m))
+
+// The predicate logic instructions have only a byte form. Governing them by
+// the all-true mask of the lane size zeroes the bits between lanes. A Mask8s
+// has a lane for every bit, so x itself can govern it.
+(Mask8sAnd x y) => (PANDB x x y)
+(Mask16sAnd x y) => (PANDB (Mask16sAllTrue <types.TypeMask>) x y)
+(Mask32sAnd x y) => (PANDB (Mask32sAllTrue <types.TypeMask>) x y)
+(Mask64sAnd x y) => (PANDB (Mask64sAllTrue <types.TypeMask>) x y)
+(Mask8sAndNot x y) => (PBICB x x y)
+(Mask16sAndNot x y) => (PBICB (Mask16sAllTrue <types.TypeMask>) x y)
+(Mask32sAndNot x y) => (PBICB (Mask32sAllTrue <types.TypeMask>) x y)
+(Mask64sAndNot x y) => (PBICB (Mask64sAllTrue <types.TypeMask>) x y)
+(Mask8sOr x y) => (PORRB (Mask8sAllTrue <types.TypeMask>) x y)
+(Mask16sOr x y) => (PORRB (Mask16sAllTrue <types.TypeMask>) x y)
+(Mask32sOr x y) => (PORRB (Mask32sAllTrue <types.TypeMask>) x y)
+(Mask64sOr x y) => (PORRB (Mask64sAllTrue <types.TypeMask>) x y)
+(Mask8sXor x y) => (PEORB (Mask8sAllTrue <types.TypeMask>) x y)
+(Mask16sXor x y) => (PEORB (Mask16sAllTrue <types.TypeMask>) x y)
+(Mask32sXor x y) => (PEORB (Mask32sAllTrue <types.TypeMask>) x y)
+(Mask64sXor x y) => (PEORB (Mask64sAllTrue <types.TypeMask>) x y)
+
+// NOT is EOR with the governing predicate as the second source.
+(Mask8sNot x) => (PEORB t:(Mask8sAllTrue <types.TypeMask>) x t)
+(Mask16sNot x) => (PEORB t:(Mask16sAllTrue <types.TypeMask>) x t)
+(Mask32sNot x) => (PEORB t:(Mask32sAllTrue <types.TypeMask>) x t)
+(Mask64sNot x) => (PEORB t:(Mask64sAllTrue <types.TypeMask>) x t)
 
 // == on SIMD vectors and masks. Integer vectors and masks are equal if their
 // XOR is zero. Float vectors are equal if every element compares equal, so NaN
