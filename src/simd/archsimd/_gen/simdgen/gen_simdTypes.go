@@ -334,14 +334,10 @@ func (x simdType) CPUFeature() string {
 		case 128:
 			return "AVX"
 		case 256:
-			switch x.Shape.Elem.Base {
-			case "float", "mask":
-				return "AVX"
-			case "int", "uint":
-				return "AVX2"
-			default:
-				panic(fmt.Errorf("unexpected element base %q", x.Shape.Elem.Base))
-			}
+			// Loading, storing, and reinterpreting 256-bit vectors requires
+			// only AVX, even for integer elements. Most integer operations
+			// require AVX2, which they document individually.
+			return "AVX"
 		case 512:
 			return "AVX512"
 		default:
@@ -471,6 +467,9 @@ func (x {{.Name}}) Not() {{.Name}}
 func (x {{.Name}}) To{{.VectorCounterpart}}() {{.VectorCounterpart}} {
 	return Broadcast{{.VectorCounterpart}}(-1).Masked(x)
 }
+
+// Asm: Emulated (BRKB + CNTP), CPU Feature: SVE
+func (x {{.Name}}) TrailingZeros() int
 {{end}}
 
 {{define "sveIfElseTmpl"}}
@@ -928,23 +927,23 @@ func (x {{.Name}}) To{{.VectorCounterpart}}() (z {{.VectorCounterpart}})
 // asMask converts from {{.VectorCounterpart}} to {{.Name}}.
 func (from {{.VectorCounterpart}}) asMask() (to {{.Name}})
 
-{{if .VectorCounterpart.CPUFeature}}// CPU Feature: {{.VectorCounterpart.CPUFeature}}
+{{if .CPUFeature}}// CPU Feature: {{.CPUFeature}}
 {{end -}}
 func (x {{.Name}}) And(y {{.Name}}) {{.Name}}
 
-{{if .VectorCounterpart.CPUFeature}}// CPU Feature: {{.VectorCounterpart.CPUFeature}}
+{{if .CPUFeature}}// CPU Feature: {{.CPUFeature}}
 {{end -}}
 func (x {{.Name}}) AndNot(y {{.Name}}) {{.Name}}
 
-{{if .VectorCounterpart.CPUFeature}}// CPU Feature: {{.VectorCounterpart.CPUFeature}}
+{{if .CPUFeature}}// CPU Feature: {{.CPUFeature}}
 {{end -}}
 func (x {{.Name}}) Or(y {{.Name}}) {{.Name}}
 
-{{if .VectorCounterpart.CPUFeature}}// CPU Feature: {{.VectorCounterpart.CPUFeature}}
+{{if .CPUFeature}}// CPU Feature: {{.CPUFeature}}
 {{end -}}
 func (x {{.Name}}) Xor(y {{.Name}}) {{.Name}}
 {{if .HasNot}}
-{{if .VectorCounterpart.CPUFeature}}// CPU Feature: {{.VectorCounterpart.CPUFeature}}
+{{if .CPUFeature}}// CPU Feature: {{.CPUFeature}}
 {{end -}}
 func (x {{.Name}}) Not() {{.Name}}
 {{end}}`)

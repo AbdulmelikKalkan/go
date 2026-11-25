@@ -98,8 +98,6 @@
   asm: "VDUP"
   ssaVariant: "bcast"
   constImm: 0
-  peepholeRules:
-  - !string "(%h [i] (VMOV%sins [j] _ (MOVDconst [c]))) && i == j && c>=-128 && c<=255 => (VMOVI%a [uint8(c)])"
   in:
   - &immLane0
     name: "@" # tag "fully constant" (no aux field needed)

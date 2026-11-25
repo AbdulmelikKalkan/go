@@ -419,6 +419,24 @@ var genericOps = []opData{
 	{name: "IfElseFloat32", argLength: 3},
 	{name: "IfElseFloat64", argLength: 3},
 
+	// Bitwise operations on 256-bit SIMD masks held in vector registers.
+	// Unlike the integer vector operations, these can use either integer or
+	// floating-point instructions. AndNotMask256 computes arg0 &^ arg1.
+	{name: "AndMask256", argLength: 2, commutative: true},
+	{name: "OrMask256", argLength: 2, commutative: true},
+	{name: "XorMask256", argLength: 2, commutative: true},
+	{name: "AndNotMask256", argLength: 2},
+
+	// Bitwise operations on 512-bit SIMD masks. These lower to the same
+	// instructions as the integer vector operations, but are separate so
+	// that the ternary logic fusion can leave them alone: these masks are
+	// in K registers, so they shouldn't be moved to vectors to fuse their
+	// logic. AndNotMask512 computes arg0 &^ arg1.
+	{name: "AndMask512", argLength: 2, commutative: true},
+	{name: "OrMask512", argLength: 2, commutative: true},
+	{name: "XorMask512", argLength: 2, commutative: true},
+	{name: "AndNotMask512", argLength: 2},
+
 	// Normally we require that the source and destination of Move do not overlap.
 	// There is an exception when we know all the loads will happen before all
 	// the stores. In that case, overlap is ok. See
@@ -907,6 +925,13 @@ var genericOps = []opData{
 	{name: "Mask16sNot", argLength: 1},
 	{name: "Mask32sNot", argLength: 1},
 	{name: "Mask64sNot", argLength: 1},
+
+	// TrailingZeros returns the number of low-order inactive lanes of arg0, or
+	// the number of lanes if none is active.
+	{name: "Mask8sTrailingZeros", argLength: 1},
+	{name: "Mask16sTrailingZeros", argLength: 1},
+	{name: "Mask32sTrailingZeros", argLength: 1},
+	{name: "Mask64sTrailingZeros", argLength: 1},
 }
 
 //     kind          controls          successors   implicit exit

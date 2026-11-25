@@ -204,22 +204,38 @@ func testTransportKeepAlives(t *testing.T, mode testMode) {
 }
 
 func TestTransportConnectionCloseOnResponse(t *testing.T) {
-	runNoSynctest(t, testTransportConnectionCloseOnResponse, http3SkippedMode)
+	runSynctest(t, testTransportConnectionCloseOnResponse)
 }
 func testTransportConnectionCloseOnResponse(t *testing.T, mode testMode) {
-	ts := newClientServerTest(t, mode, hostPortHandler, optRealNet).ts
+	var mu sync.Mutex
+	openConns := map[net.Conn]bool{}
+	cst := newClientServerTest(t, mode, hostPortHandler, func(s *Server) {
+		s.ConnState = func(c net.Conn, state ConnState) {
+			mu.Lock()
+			defer mu.Unlock()
+			switch state {
+			case StateNew:
+				openConns[c] = true
+			case StateClosed:
+				delete(openConns, c)
+			}
+		}
+	})
+	var dials atomic.Int32
+	cst.setDialHook(func() error {
+		dials.Add(1)
+		return nil
+	})
 
-	connSet, testDial := makeTestDial(t)
-
-	c := ts.Client()
-	tr := c.Transport.(*Transport)
-	tr.Dial = testDial
+	c := cst.c
+	tr := cst.tr
 
 	for _, connectionClose := range []bool{false, true} {
-		fetch := func(n int) string {
+		dials.Store(0)
+		fetch := func(n int) {
 			req := new(Request)
 			var err error
-			req.URL, err = url.Parse(ts.URL + fmt.Sprintf("/?close=%v", connectionClose))
+			req.URL, err = url.Parse(cst.ts.URL + fmt.Sprintf("/?close=%v", connectionClose))
 			if err != nil {
 				t.Fatalf("URL parse error: %v", err)
 			}
@@ -233,25 +249,30 @@ func testTransportConnectionCloseOnResponse(t *testing.T, mode testMode) {
 				t.Fatalf("error in connectionClose=%v, req #%d, Do: %v", connectionClose, n, err)
 			}
 			defer res.Body.Close()
-			body, err := io.ReadAll(res.Body)
-			if err != nil {
+			if _, err := io.ReadAll(res.Body); err != nil {
 				t.Fatalf("error in connectionClose=%v, req #%d, ReadAll: %v", connectionClose, n, err)
 			}
-			return string(body)
 		}
 
-		body1 := fetch(1)
-		body2 := fetch(2)
-		bodiesDiffer := body1 != body2
-		if bodiesDiffer != connectionClose {
-			t.Errorf("error in connectionClose=%v. unexpected bodiesDiffer=%v; body1=%q; body2=%q",
-				connectionClose, bodiesDiffer, body1, body2)
+		fetch(1)
+		fetch(2)
+		wantDials := 1
+		if connectionClose {
+			wantDials++
+		}
+		if got := int(dials.Load()); got != wantDials {
+			t.Errorf("connectionClose=%v: got %d dials, want %d", connectionClose, got, wantDials)
 		}
 
 		tr.CloseIdleConnections()
+		synctest.Wait()
 	}
 
-	connSet.check(t)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(openConns) != 0 {
+		t.Errorf("%d connections were not closed", len(openConns))
+	}
 }
 
 // TestTransportConnectionCloseOnRequest tests that the Transport's doesn't reuse
@@ -1456,6 +1477,95 @@ func TestTransportProxy(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTransportHTTPSProxyHTTP2PoolPoisoning validates the fix for #83349.
+// It used to be possible for us to negotiate HTTP/2 with an https:// proxy,
+// and then add that proxy into the connection pool under the address of the
+// target host (the one we're proxying *to*).
+func TestTransportHTTPSProxyHTTP2PoolPoisoning(t *testing.T) {
+	CondSkipHTTP2(t)
+	synctest.Test(t, func(t *testing.T) {
+		// We don't use the usual test infrastructure here, because we need a bit more
+		// control over the server's connections than usual.
+		protocols := new(Protocols)
+		protocols.SetHTTP1(true)
+		protocols.SetHTTP2(true)
+
+		cert, err := tls.X509KeyPair(testcert.LocalhostCert, testcert.LocalhostKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		serverTLSConf := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		}
+
+		// Proxy server, willing to accept HTTP/1 and HTTP/2.
+		var gotConnect atomic.Bool
+		li := nettest.NewListener()
+		defer li.Close()
+		proxy := &Server{
+			Handler: HandlerFunc(func(w ResponseWriter, r *Request) {
+				if r.ProtoMajor != 1 {
+					t.Errorf("proxy received ProtoMajor=%v; want 1", r.ProtoMajor)
+				}
+				if r.Method == "CONNECT" {
+					gotConnect.Store(true)
+					w.WriteHeader(StatusForbidden)
+					return
+				}
+				if r.URL.Path == "/https" {
+					t.Errorf("proxy received HTTPS request")
+				}
+			}),
+			TLSConfig: serverTLSConf,
+			Protocols: protocols,
+		}
+		go proxy.ServeTLS(li, "", "")
+		defer proxy.Close()
+
+		// Transport, configured to use the proxy and willing to use HTTP/1 and HTTP/2.
+		proxyURL := url.MustParse("https://proxy.example.tld")
+		tr := &Transport{
+			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return li.NewConn(), nil
+			},
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+			Protocols: protocols,
+			Proxy:     ProxyURL(proxyURL),
+		}
+		defer tr.CloseIdleConnections()
+
+		// Make a non-TLS HTTP request through the HTTPS proxy.
+		// The client must not negotiate HTTP/2 with the proxy,
+		// and definitely must not put the proxy in the connection pool
+		// for this destination (see issue #83349).
+		//
+		// (Note that while this request is a weird HTTP-to-port-443
+		// that no client would intentionally send, a malicious proxy
+		// could trigger this by redirecting a more innocent request to
+		// this destination.)
+		req1, _ := NewRequest("GET", "http://target.tld:443/http", nil)
+		resp1, err := tr.RoundTrip(req1)
+		if err != nil {
+			t.Fatalf("%v: %v", req1.URL, err)
+		}
+		resp1.Body.Close()
+
+		// Make a TLS request, which fails when our proxy refuses to create
+		// a CONNECT tunnel.
+		req2, _ := NewRequest("GET", "https://target.tld:443/https", nil)
+		resp2, err := tr.RoundTrip(req2)
+		if err == nil {
+			resp2.Body.Close()
+			t.Fatalf("%v: unexpected success (want proxy error)", req2.URL)
+		}
+		if !gotConnect.Load() {
+			t.Errorf("expected proxy to receive CONNECT; did not")
+		}
+	})
 }
 
 // Issue 74633: verify that a client will not indefinitely read a response from

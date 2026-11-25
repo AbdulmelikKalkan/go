@@ -307,6 +307,16 @@ func simdV01Imm(s *ssagen.State, v *ssa.Value, arrangement int16) *obj.Prog {
 	return p
 }
 
+// simdV01Imm64 generates a VMOVI-like instruction with 64-bit imm, e.g. VMOVI $(0xFF<<56|0xFF), V0.D2
+func simdV01Imm64(s *ssagen.State, v *ssa.Value, arrangement int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_CONST
+	p.From.Offset = v.AuxInt
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = simdRegArng(v.Reg(), arrangement)
+	return p
+}
+
 // simdV11Asm generates element-wise unary vector operations with explicit asm, e.g. VMOV V1.B16, V0.B16
 func simdV11Asm(s *ssagen.State, asm obj.As, src, dst int16, arrangement int16) *obj.Prog {
 	p := s.Prog(asm)
@@ -342,6 +352,16 @@ func simdV11ImmIn1(s *ssagen.State, v *ssa.Value, arrangement int16) *obj.Prog {
 	p.From = simdRegElem(v.Args[0].Reg(), arrangement, int16(v.AuxUInt8()))
 	p.To.Type = obj.TYPE_REG
 	p.To.Reg = simdRegArng(v.Reg(), allLanes(arrangement))
+	return p
+}
+
+// simdGpv generates a broadcast from a general register, e.g. VDUP R0, V0.S4.
+func simdGpv(s *ssagen.State, v *ssa.Value, arrangement int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = v.Args[0].Reg()
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = simdRegArng(v.Reg(), arrangement)
 	return p
 }
 
@@ -649,6 +669,20 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		// nothing to do
 	case ssaop.OpARM64VMOVI16B:
 		simdV01Imm(s, v, arm64.ARNG_16B)
+	case ssaop.OpARM64VMOVI8H:
+		simdV01Imm64(s, v, arm64.ARNG_8H)
+	case ssaop.OpARM64VMOVI4S:
+		simdV01Imm64(s, v, arm64.ARNG_4S)
+	case ssaop.OpARM64VMOVI2D:
+		simdV01Imm64(s, v, arm64.ARNG_2D)
+	case ssaop.OpARM64VDUPB:
+		simdGpv(s, v, arm64.ARNG_16B)
+	case ssaop.OpARM64VDUPH:
+		simdGpv(s, v, arm64.ARNG_8H)
+	case ssaop.OpARM64VDUPS:
+		simdGpv(s, v, arm64.ARNG_4S)
+	case ssaop.OpARM64VDUPD:
+		simdGpv(s, v, arm64.ARNG_2D)
 	case ssaop.OpLoadReg:
 		if v.Type.IsFlags() {
 			v.Fatalf("load flags not implemented: %v", v.LongString())
@@ -828,6 +862,22 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.AddRestSourceReg(pregMask(v.Args[0].Reg(), arm64.PRED_Z))
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = pregArng(v.Reg(), arm64.ARNG_B)
+	case ssaop.OpARM64PBRKB:
+		// PBRKB P1.B, P0.Z, P2.B: P2 = the lanes of P0 before the first one set in P1.
+		p := s.Prog(v.Op.Asm())
+		p.From.Type = obj.TYPE_REG
+		p.From.Reg = pregArng(v.Args[1].Reg(), arm64.ARNG_B)
+		p.AddRestSourceReg(pregMask(v.Args[0].Reg(), arm64.PRED_Z))
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = pregArng(v.Reg(), arm64.ARNG_B)
+	case ssaop.OpARM64PCNTPB:
+		simdPCntp(s, v, arm64.ARNG_B)
+	case ssaop.OpARM64PCNTPH:
+		simdPCntp(s, v, arm64.ARNG_H)
+	case ssaop.OpARM64PCNTPS:
+		simdPCntp(s, v, arm64.ARNG_S)
+	case ssaop.OpARM64PCNTPD:
+		simdPCntp(s, v, arm64.ARNG_D)
 	case ssaop.OpARM64PPTEST:
 		// PPTEST P1.B, P0: flags from the lanes of P1 that P0 governs.
 		p := s.Prog(v.Op.Asm())
@@ -2554,6 +2604,19 @@ func simdPNext(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
 	p.AddRestSourceReg(v.Args[1].Reg())
 	p.To.Type = obj.TYPE_REG
 	p.To.Reg = pregArng(v.Reg(), arng)
+	return p
+}
+
+// simdPCntp emits a PCNTP with the given element arrangement, e.g.
+// PCNTP P1.H, P0, R0. SSA provides arg0=the governing predicate and
+// arg1=the predicate to count.
+func simdPCntp(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = pregArng(v.Args[1].Reg(), arng)
+	p.AddRestSourceReg(v.Args[0].Reg())
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = v.Reg()
 	return p
 }
 

@@ -77,8 +77,61 @@ func broadcastConstImmFold(k int) {
 		// arm64:`VMOVI [$]254,` -`VDUP`
 		sinkI8 = archsimd.BroadcastInt8x16(-2)
 	default:
-		// arm64:`VMOV R0, V\d+.B\[0\]` `VDUP`
+		// arm64:`VDUP R[0-9]+, V[0-9]+\.B16` -`VMOV`
 		sinkI8 = archsimd.BroadcastInt8x16(int8(k))
+	}
+}
+
+func broadcastConstImmFoldWide(k int) {
+	switch k {
+	case 0:
+		// arm64:`VMOVI [$]66, V\d+\.H8` -`VDUP`
+		sinkU16 = archsimd.BroadcastUint16x8(0x42)
+	case 1:
+		// arm64:`VMOVI [$]16896, V\d+\.H8` -`VDUP`
+		sinkU16 = archsimd.BroadcastUint16x8(0x4200)
+	case 2:
+		// arm64:`VMOVI [$]65280, V\d+\.H8` -`VDUP`
+		sinkU16 = archsimd.BroadcastUint16x8(0xFF00)
+	case 3:
+		// arm64:`VMOVI [$]66, V\d+\.S4` -`VDUP`
+		sinkU32 = archsimd.BroadcastUint32x4(0x42)
+	case 4:
+		// arm64:`VMOVI [$]16896, V\d+\.S4` -`VDUP`
+		sinkU32 = archsimd.BroadcastUint32x4(0x4200)
+	case 5:
+		// arm64:`VMOVI [$]4325376, V\d+\.S4` -`VDUP`
+		sinkU32 = archsimd.BroadcastUint32x4(0x420000)
+	case 6:
+		// arm64:`VMOVI [$]1107296256, V\d+\.S4` -`VDUP`
+		sinkU32 = archsimd.BroadcastUint32x4(0x42000000)
+	case 7:
+		// arm64:`VMOVI [$]17151, V\d+\.S4` -`VDUP`
+		sinkU32 = archsimd.BroadcastUint32x4(0x42FF)
+	case 8:
+		// arm64:`VMOVI [$]196607, V\d+\.S4` -`VDUP`
+		sinkU32 = archsimd.BroadcastUint32x4(0x2FFFF)
+	case 9:
+		// arm64:`VMOVI [$]0, V\d+\.S4` -`VDUP`
+		sinkU32 = archsimd.BroadcastUint32x4(0)
+	case 10:
+		// arm64:`VMOVI [$]-71777214294589696, V\d+\.D2` -`VDUP`
+		sinkU64 = archsimd.BroadcastUint64x2(0xFF00FF00FF00FF00)
+	case 11:
+		// arm64:`VMOVI [$]-1, V\d+\.D2` -`VDUP`
+		sinkU64 = archsimd.BroadcastUint64x2(0xFFFFFFFFFFFFFFFF)
+	case 12:
+		// arm64:`VMOVI [$]0, V\d+\.D2` -`VDUP`
+		sinkU64 = archsimd.BroadcastUint64x2(0)
+	case 13:
+		// arm64:`VMOVI [$]4278190080, V\d+\.S4` -`VDUP`
+		sinkU32 = archsimd.BroadcastUint32x4(0xFF000000)
+	case 14:
+		// arm64:`VDUP R[0-9]+, V[0-9]+\.H8` -`VMOV`
+		sinkU16 = archsimd.BroadcastUint16x8(0x4201)
+	default:
+		// arm64:`VDUP R[0-9]+, V[0-9]+\.S4` -`VMOV`
+		sinkU32 = archsimd.BroadcastUint32x4(0x7F7F7F7F)
 	}
 }
 
@@ -236,8 +289,8 @@ func mergeWithNotMask(x, y archsimd.Int8x16, mask archsimd.Mask8x16, f1, f2 arch
 	sinkI8 = x.IfElse(mask.Not(), y)
 	// arm64: `VFCMEQ`
 	eq := f1.Equal(f2)
-	// The next line `ne` should be CSEd with `eq` above
-	ne := f1.NotEqual(f2)    // arm64: -`.*`
+	// ne is CSEd with eq above, so its line has only a DWARF anchor NOP.
+	ne := f1.NotEqual(f2)    // arm64: -`V[A-Z]`
 	feq := f1.IfElse(eq, f2) // arm64:`VBIF`
 	fne := f1.IfElse(ne, f2) // arm64:`VBIT`
 	sinkF32 = fne.Add(feq)
@@ -399,6 +452,19 @@ func sveNotIfElseFoldsToMerging64(x, z archsimd.Int64s, m archsimd.Mask64s) arch
 func sveIfElseFloat(x, y archsimd.Float64s, m archsimd.Mask64s) archsimd.Float64s {
 	// arm64:`ZFADD.*P[0-9]+\.M` -`ZSEL`
 	return x.Add(y).IfElse(m, x)
+}
+
+// Less is Greater with the operands swapped, so it is one compare with the
+// sources reversed.
+func sveLess(x, y archsimd.Int32s) archsimd.Mask32s {
+	// arm64:`ZCMPGT\s+Z0\.S, Z1\.S, P[0-9]+\.Z, P[0-9]+\.S`
+	return x.Less(y)
+}
+
+// LessEqual is GreaterEqual with the operands swapped.
+func sveLessEqual(x, y archsimd.Float64s) archsimd.Mask64s {
+	// arm64:`ZFCMGE\s+Z0\.D, Z1\.D, P[0-9]+\.Z, P[0-9]+\.D`
+	return x.LessEqual(y)
 }
 
 // A reduction leaves its result in the SIMD&FP scalar register that a float
@@ -614,6 +680,28 @@ func sveZeroMask() archsimd.Mask8s {
 	var m archsimd.Mask8s
 	// arm64:`PPFALSE` -`ZDUP`
 	return m
+}
+
+// The all-true mask is built at the lane size, PBRKB is always .B, and PCNTP
+// counts at the lane size.
+func sveMaskTrailingZeros8(m archsimd.Mask8s) int {
+	// arm64:`PWHILELT.*P[0-9]+\.B` `PBRKB\s+P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B` `PCNTP\s+P[0-9]+\.B, P[0-9]+, R[0-9]+`
+	return m.TrailingZeros()
+}
+
+func sveMaskTrailingZeros16(m archsimd.Mask16s) int {
+	// arm64:`PWHILELT.*P[0-9]+\.H` `PBRKB\s+P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B` `PCNTP\s+P[0-9]+\.H, P[0-9]+, R[0-9]+`
+	return m.TrailingZeros()
+}
+
+func sveMaskTrailingZeros32(m archsimd.Mask32s) int {
+	// arm64:`PWHILELT.*P[0-9]+\.S` `PBRKB\s+P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B` `PCNTP\s+P[0-9]+\.S, P[0-9]+, R[0-9]+`
+	return m.TrailingZeros()
+}
+
+func sveMaskTrailingZeros64(m archsimd.Mask64s) int {
+	// arm64:`PWHILELT.*P[0-9]+\.D` `PBRKB\s+P[0-9]+\.B, P[0-9]+\.Z, P[0-9]+\.B` `PCNTP\s+P[0-9]+\.D, P[0-9]+, R[0-9]+`
+	return m.TrailingZeros()
 }
 
 // An operation whose unpredicated encoding needs SVE2 lowers to it only in

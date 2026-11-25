@@ -803,6 +803,7 @@ func cpuinit(env string) {
 		loong64HasLAM_BH = cpu.Loong64.HasLAM_BH
 		loong64HasDBAR_HINTS = cpu.Loong64.HasDBAR_HINTS
 		loong64HasLSX = cpu.Loong64.HasLSX
+		loong64HasLASX = cpu.Loong64.HasLASX
 
 	case "riscv64":
 		riscv64HasV = cpu.RISCV64.HasV
@@ -6973,8 +6974,9 @@ func preemptone(pp *p) bool {
 	if gp == nil || gp == mp.g0 {
 		return false
 	}
-	if readgstatus(gp)&^_Gscan == _Gsyscall {
-		// Don't bother trying to preempt a goroutine in a syscall.
+	if s := readgstatus(gp) &^ _Gscan; s == _Gsyscall || s == _Gdeadextra {
+		// Don't bother trying to preempt a goroutine in a syscall, or the
+		// dead goroutine of an extra M that went back to C holding its P.
 		return false
 	}
 
