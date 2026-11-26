@@ -370,7 +370,7 @@ var depsRules = `
 	math/big, go/token
 	< go/constant;
 
-	FMT, internal/goexperiment
+	FMT, internal/goexperiment, golang.org/x/sys/cpu
 	< internal/buildcfg;
 
 	# The vast majority of standard library packages should not be resorting to regexp.
@@ -651,7 +651,7 @@ var depsRules = `
 	FMT, STR, crypto/md5, encoding/binary, encoding/json, go/analysis, go/build, go/token, go/types
 	< golang.org/x/tools/go/types/objectpath,
 	  golang.org/x/tools/internal/pkgbits
-	< golang.org/x/tools/internal/gcimporter
+	< golang.org/x/tools/internal/exportdata
 	< golang.org/x/tools/go/gcexportdata;
 
 	# The vendored golang.org/x/tools analysis framework (passes and
